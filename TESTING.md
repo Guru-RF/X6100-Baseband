@@ -41,9 +41,10 @@ zero means 300–3000 Hz. Start with compressor bypass set, CESSB off and the
 300–3000 Hz filter. `src/tx_protocol.c` defines the complete parameter mapping.
 
 The adapter requires stable RX snapshots before applying settings. It will not
-first arm during TX, and it freezes the configuration while transmitting.
-Removing the token disables the added sample processing at the next callback;
-the default TX filter is restored once receiving. This is a guarded test
+first arm when its block-entry snapshot says TX, and that callback then skips
+configuration updates. Removing the token disables the added sample processing
+at the next callback; a block that observes the token clear restores the default
+TX filter once receiving. This is a guarded test
 protocol, not a completed atomic commit/ack protocol. Do not change settings
 during TX. Only voice LSB/USB gets added compression/CESSB/interpolation; the
 OEM TX bandpass is shared with other modes and needs separate validation.
@@ -52,6 +53,35 @@ Stock V1.1.9 parses compressor bit 4 with the opposite meaning. Static tracing
 has not found a downstream user of those OEM compressor fields, so the test
 image does not patch an assumed OEM compressor routine. Interaction still needs
 measurement on the radio.
+
+### Full-register refresh and PTT limits
+
+An identical refresh of already-applied registers 0–55 is a configuration no-op,
+including register 36 arriving before 38: it does not rebuild the filter or reset
+private histories. Keep the token when compressor and CESSB are off if the GUI
+is managing the TX filter. Private interpolation requires applied CESSB enable
+and voice LSB/USB TX as well as the token; arming alone does not select it.
+
+That guarantee does not cover a restarted/desynchronized BASE or a partial
+transfer. A modeled pause after armed register 36 but before 38 can apply an
+old/default filter before the intended filter arrives. Recovery requires the
+explicit disarm/configure/publish sequence rather than assuming the cached
+full-register block is already present on the BASE.
+
+The alpha.2 image also has known timing limits when a settings write overlaps
+PTT. Clearing and republishing the token between block callbacks can bypass and
+resume the old DSP histories without a reset. Clearing it between the two I/Q
+selectors can select different interpolation paths for that pair. A TX-state
+transition injected after the initial RX snapshot does not cancel an in-flight
+configuration update. These are reproduced code-level interleavings, not
+measurements of the radio's interrupt schedule or RF output. GUI deferral based
+on received TX packets does not close that window. Do not change DSP settings
+while keying; coordinated TX/configuration commit and coherent I/Q switching
+remain required before a stable release.
+
+`tools/verify_gui_protocol.py --elf build/tx-test.elf` reproduces the refresh,
+selection, PTT-boundary and recovery checks on the released payload. It models
+decoded command-memory writes and callbacks, not the physical I2C ISR.
 
 ## Install and return to stock
 
