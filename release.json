@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "project": "Guru-RF/X6100-Baseband",
+  "version": "v0.1.0-alpha.1",
+  "status": "research-prerelease",
+  "test_only": true,
+  "installable": false,
+  "warning": "TEST ONLY — source research preview; no installable firmware is provided. Do not flash the analysis ELF.",
+  "release_url": "https://github.com/Guru-RF/X6100-Baseband/releases/tag/v0.1.0-alpha.1",
+  "target": {
+    "model": "X6100",
+    "stock_baseband_version": "V1.1.9",
+    "stock_build": "251127001",
+    "stock_plaintext_sha256": "3fa11293e06951c21c9cfda04ea08adad85eaadda26b77a8e8bbcca8820c53c4"
+  },
+  "firmware_assets": [],
+  "license": {
+    "project_contributions": "GPL-3.0-or-later",
+    "attribution_notice": "NOTICE",
+    "upstream_dsp_permission": "unresolved"
+  }
+}

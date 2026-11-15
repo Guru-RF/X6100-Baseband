@@ -1,8 +1,10 @@
 /* DSP port research, based on the algorithms in gdyuldin/x6100_base_patch r13
  * (644ac675a1765ce69755870767b4cb00a3e6d7eb), Core/Src/cessb.c and compressor.c.
  * https://github.com/gdyuldin/x6100_base_patch/tree/r13
- * Upstream had no root license at inspection; no redistribution license is
- * asserted here. Hardware integration and RF performance remain unvalidated.
+ * Copyright (C) 2026 Guru-RF and the X6100-Baseband contributors.
+ * Our contributions: GPL-3.0-or-later; see LICENSE and NOTICE for attribution.
+ * Upstream DSP permission remains unresolved; our grant does not license it.
+ * Hardware integration and RF performance remain unvalidated.
  *
  * CESSB retains r13's 65-tap filtered clipping-error correction and 32-sample
  * delay. One correction stage REDUCES overshoot; it is not a hard peak limiter.

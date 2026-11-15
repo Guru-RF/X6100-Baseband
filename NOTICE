@@ -1,0 +1,70 @@
+X6100-Baseband
+Copyright (C) 2026 Guru-RF and the X6100-Baseband contributors
+https://github.com/Guru-RF/X6100-Baseband
+
+License for project contributions
+---------------------------------
+Except for third-party material described below or separately identified in a
+file, the original material contributed to this repository by Guru-RF and the
+X6100-Baseband contributors is licensed under the GNU General Public License,
+version 3 or (at your option) any later version (GPL-3.0-or-later). The complete
+license text is in LICENSE.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+Attribution term under GPLv3 section 7(b)
+---------------------------------------
+For the material covered by the grant above, preserve this author attribution
+in source distributions and in the legal notices accompanying distributions
+of object code or works containing that material:
+
+    X6100-Baseband — Copyright (C) 2026 Guru-RF and the
+    X6100-Baseband contributors.
+    https://github.com/Guru-RF/X6100-Baseband
+
+This does not require advertising, a particular user interface, or endorsement
+by Guru-RF. Keep existing third-party copyright and license notices as well.
+
+Source obligations
+------------------
+Distribution of covered object code must provide Corresponding Source by a
+method permitted by GPLv3 section 6. For example, under section 6(d), a download
+can offer equivalent access to the matching Corresponding Source at no further
+charge, with clear directions next to the binary. Include the relevant build
+scripts, LICENSE and this NOTICE. A link to a moving branch or to only the original,
+unmodified source does not supply the source for your modified binary. Preserve
+notices, identify modifications, and license covered modified works under the
+GPL as required by its terms. Private use does not itself require publication.
+
+Third-party provenance and unresolved permission
+-----------------------------------------------
+The DSP work adapts gdyuldin/x6100_base_patch r13, including the contributions
+of Georgy Dyuldin (R2RFE) and other upstream contributors:
+https://github.com/gdyuldin/x6100_base_patch/tree/644ac675a1765ce69755870767b4cb00a3e6d7eb
+Upstream credits KI9NG for the CESSB idea.
+
+Affected material retained here:
+  - src/tx_dsp.c: CESSB/compressor adaptation from Core/Src/cessb.c and
+    Core/Src/compressor.c, with port-specific state, mixing and optimizations.
+  - firmware/tx_interpolation.c: the 64-coefficient table from fir_ssb_cw_8.txt,
+    reversed and rounded to float32 as upstream patch.py does.
+  - tests/test_tx_dsp.c: reference CESSB/compressor implementations associated
+    with the adapted DSP behavior.
+
+No root license grant or in-file license notices were found for those DSP files
+in the inspected r13 revision. Its vendor CMSIS/HAL licenses do not license these
+files. This repository's GPL grant covers our contributions only; it does not
+grant rights in the upstream material or establish permission to redistribute
+the complete derived source or a binary containing it. Upstream permission or
+replacement of affected material remains necessary before we can represent the
+complete project as freely redistributable. Credit is not a license grant.
+
+src/tx_protocol.c documents interface fields observed in r13 and OpenX6X00;
+protocol compatibility does not imply either project's endorsement.
+
+Vendor firmware, encryption keys and toolchains are not included. Nothing in
+this notice grants rights in Xiegu firmware or changes separately applicable
+toolchain, library or dependency licenses. Assess those separately when
+distributing any future linked or combined firmware image.

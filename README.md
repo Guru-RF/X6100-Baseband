@@ -4,6 +4,12 @@ CESSB, adjustable TX filtering and compressor controls for **BASE V1.1.9
 (251127001)**. This builds an **analysis ELF**, not an installable firmware image.
 Hardware timing, RF behavior and update/rollback validation remain outstanding.
 
+The first [prerelease, v0.1.0-alpha.1](https://github.com/Guru-RF/X6100-Baseband/releases/tag/v0.1.0-alpha.1),
+is **TEST ONLY: source research preview, not installable**. It contains no
+flashable `.xgf` or `.bin`. [release.json](release.json) records this status with
+`installable: false` and an empty firmware asset list. OpenX6X00 may link to this
+preview, but must keep installation disabled.
+
 ## Implementation
 
 - CESSB using a 65-tap filtered clipping correction and a 32-sample delay.
@@ -141,11 +147,18 @@ Before an installable build:
 5. Verify bootloader erase boundaries, calibration preservation and rollback,
    including interrupted updates. The bootloader implementation is unavailable.
 
-## Provenance
+## License and provenance
+
+Guru-RF's original contributions are licensed under **GPL-3.0-or-later** with
+the attribution term in [NOTICE](NOTICE); the full GPL text is in
+[LICENSE](LICENSE). Distributors of covered binaries must provide the matching
+Corresponding Source under GPLv3 section 6 and retain the Guru-RF/project credit.
+See NOTICE for the scope, upstream credits and distribution details.
 
 The DSP derives from [gdyuldin/x6100_base_patch r13](https://github.com/gdyuldin/x6100_base_patch/tree/r13),
 commit `644ac675a1765ce69755870767b4cb00a3e6d7eb`. The port uses a conjugate return
 mixer instead of r13's fixed 90-degree rotation, a recursive oscillator, explicit
-state ownership and optimized FIR traversal. Upstream had no root license
-statement in the inspected revision; this repository asserts no redistribution
-license for the derived DSP code.
+state ownership and optimized FIR traversal. No license grant was found for
+the inspected upstream DSP sources. **Our GPL grant does not license that upstream
+material.** Permission to redistribute the complete derived project remains
+unresolved; NOTICE identifies the affected files. No vendor firmware is included.

@@ -1,4 +1,7 @@
 /* TX-only interpolation correction for the V1.1.9 research payload.
+ * Copyright (C) 2026 Guru-RF and the X6100-Baseband contributors.
+ * Our contributions: GPL-3.0-or-later; see LICENSE and NOTICE for attribution.
+ * Upstream coefficient permission remains unresolved; our grant excludes it.
  *
  * Coefficients: gdyuldin/x6100_base_patch, fir_ssb_cw_8.txt at
  * 644ac675a1765ce69755870767b4cb00a3e6d7eb, reversed and rounded to float32
