@@ -299,7 +299,7 @@
   },
   "experimental_release": {
     "version": "v0.1.0-alpha.2",
-    "status": "encrypted test image; no hardware validation",
+    "status": "encrypted test image; limited single-radio meter tests, not fully hardware validated",
     "build_identity": "Nov 27 2025,tx1a2-test",
     "stock_version_unchanged": "V1.1.9",
     "test_payload_elf_sha256": "c92fb9157c5c9aa795c10646c179ec9975be3aa70a2b1bf4d52f205170fd9520",
@@ -333,7 +333,22 @@
       "startup_stack_span_bytes": 296,
       "missing_startup_hook_negative_control": "rejected"
     },
-    "limitations": "Instructions are not hardware cycles. ISR, RF, nested interrupts, CCM ownership, IAP erase/calibration preservation and rollback remain bench tests.",
+    "bench_observations": {
+      "date": "2026-11-15",
+      "radio_count": 1,
+      "gui_branch": "gh78-flash",
+      "gui_commit": "bd733aad",
+      "comparison_baseband": "Xiegu V1.1.8; no stock V1.1.9 or r13 RF comparison",
+      "measurement_scope": "Radio forward-power, SWR and displayed ALC telemetry only; no external power meter, scope or spectrum analyser",
+      "update_return": "Operator reports alpha.2 installation and normal return to V1.1.8 using the experimental OpenX6X00 tools/base_update X6100 path, not the stock GUI",
+      "calibration": "Operator reports identical 816-byte I2C 0xF000 window before, during and after; raw calibration bytes and writer logs are not in the supplied per-key logs",
+      "controls": "Settings changed only in RX; TX filter, compressor and CESSB responses observed",
+      "rf_overshoot_validated": false,
+      "results": "TESTING.md#bench-results--15-november-2026",
+      "evidence_url": "https://github.com/Guru-RF/X6100-Baseband/releases/download/v0.1.0-alpha.2/bench-2026-11-15.tar.gz",
+      "evidence_sha256": "4bf4fc1595af377df2b54b1a60a20478bc48308606a5c5631721faa8d4b1ae4b"
+    },
+    "limitations": "Instructions are not hardware cycles. Full ISR timing, RF envelope/spectrum and absolute power, nested interrupts, CCM ownership, complete IAP erase coverage and interrupted-update recovery remain unvalidated. The reported normal update/return and calibration-window preservation cover one radio and one cycle only.",
     "upstream_permission": "Maintainer confirmed on2026-11-15; publish findings (NOTICE)."
   }
 }

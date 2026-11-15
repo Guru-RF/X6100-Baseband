@@ -3,8 +3,10 @@
 CESSB, adjustable TX filtering and compressor controls for **BASE V1.1.9
 (251127001)**. [v0.1.0-alpha.2](https://github.com/Guru-RF/X6100-Baseband/releases/tag/v0.1.0-alpha.2)
 provides an **encrypted XGF for experimental on-radio testing**, with source,
-findings and checksums. **TEST ONLY: hardware timing, RF behavior and
-update/rollback remain unvalidated.** Read [TESTING.md](TESTING.md) before use.
+findings and checksums. **TEST ONLY:** one radio has completed limited meter
+tests and a normal update/return cycle. RF envelope/spectrum, hardware timing
+and interrupted-update recovery remain unvalidated. Read
+[TESTING.md](TESTING.md) for the 15 November 2026 results and limits before use.
 
 The separate `make payload` target still builds an analysis ELF with a
 debugger-only interlock. Only the explicit `make test-payload` build is accepted
@@ -26,8 +28,9 @@ Stock and legacy GUI commands leave the added processing bypassed. Initial GUI
 settings must leave compressor and CESSB off, with a 300–3000 Hz TX filter.
 Added compression, CESSB and interpolation correction run only in voice LSB/USB TX. The OEM TX
 bandpass is shared with other modulation modes, so its settings need broader
-mode validation. Configuration is frozen during TX; PTT/mode changes reset
-private histories.
+mode validation. Configuration changes are gated on RX snapshots; observed
+PTT/mode changes reset private histories. See [TESTING.md](TESTING.md#full-register-refresh-and-ptt-limits)
+for the known limits when a settings transaction overlaps PTT.
 
 The port retains OEM power scaling, ALC, calibration, telemetry and codec setup.
 It does not transplant the older V1.1.6 hardware-control code.
@@ -140,6 +143,12 @@ and DSP-state equivalence. Generated reports should stay under `build/reports/`.
 
 ## Current validation
 
+- On one X6100, radio-meter tests show the TX filter, compressor and CESSB
+  responding, with close in-band bypass agreement against stock V1.1.8.
+  The operator reports a successful update and return through the experimental
+  OpenX6X00 writer, preserving the checked 816-byte calibration window.
+  These are limited bench observations; see [TESTING.md](TESTING.md#bench-results--15-november-2026)
+  for the raw evidence, filter-edge differences and unresolved RF overshoot.
 - Host DSP/protocol tests, independent filter/reference checks, and ARM adapter,
   runtime and register-preservation tests pass.
 - 72 configurations and 27,648 CESSB samples/full-state snapshots match the
@@ -195,10 +204,12 @@ Before a stable release; record these results during test-image evaluation:
    eliminate its overshoot.
 3. Finish atomic I2C configuration publication and the command-collision audit.
    Stable snapshots currently reduce tearing but are not a commit/ack protocol.
-4. Validate the companion OpenX6X00 test-identity detection and control sequence.
+4. Extend the companion OpenX6X00 test-identity detection and control checks
+   beyond the observed RX-only bench session, including boot/recovery paths.
    Do not advertise an r12/r13 revision or enable features absent from this payload.
-5. Verify bootloader erase boundaries, calibration preservation and rollback,
-   including interrupted updates. The bootloader implementation is unavailable.
+5. Extend the observed normal update/return and calibration-window checks to
+   bootloader erase boundaries and interrupted updates. The bootloader
+   implementation is unavailable.
 
 ## License and provenance
 

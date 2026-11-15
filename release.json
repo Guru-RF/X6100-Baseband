@@ -5,7 +5,7 @@
   "status": "experimental-test-firmware",
   "test_only": true,
   "installable": true,
-  "warning": "TEST ONLY \u2014 encrypted X6100 image for bench testing. Hardware timing, RF performance and update/rollback are not validated. Compatible OpenX6X00 tx1a2-test support is required to activate added DSP.",
+  "warning": "TEST ONLY \u2014 encrypted X6100 image for bench testing. Limited single-radio meter tests and a normal update/return cycle are reported in TESTING.md. RF envelope/spectrum, hardware timing and interrupted-update recovery remain unvalidated. Compatible OpenX6X00 tx1a2-test support is required to activate added DSP.",
   "release_url": "https://github.com/Guru-RF/X6100-Baseband/releases/tag/v0.1.0-alpha.2",
   "target": {
     "model": "X6100",
