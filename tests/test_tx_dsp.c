@@ -1,7 +1,7 @@
 /* Copyright (C) 2026 Guru-RF and the X6100-Baseband contributors.
  * Our contributions: GPL-3.0-or-later; see LICENSE and NOTICE for attribution.
  * Includes reference adaptations of r13 CESSB/compressor behavior; upstream
- * permission remains unresolved and is not supplied by our license grant.
+ * permission and its findings-publication condition are recorded in NOTICE.
  */
 #include "tx_dsp.h"
 #include "tx_math.h"

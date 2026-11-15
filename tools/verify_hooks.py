@@ -219,7 +219,7 @@ def verify_callback_abi(elf, oem=None):
     sidebands. Memory/state behavior is covered by the dedicated adapter and
     interpolation tests; this independently audits the wrapper's ABI reliance.
     """
-    from verify_adapter import Machine, COOKIE, RATE, SAMPLES, float_bits
+    from verify_adapter import Machine, RATE, SAMPLES, float_bits
     from plan_patch import read_elf
     # Enforce the same linked ARM hard-float contract as the patch planner.
     read_elf(elf.read_bytes())
@@ -246,23 +246,26 @@ def verify_callback_abi(elf, oem=None):
 
     call("patch_init")
     machine.put32(RATE, float_bits(12500.0))
-    machine.put32("bb_lab_arm", COOKIE)
+    machine.arm()
     for low, high in ((160, 3000), (300, 2400), (300, 3000)):
         machine.flags(tx=False)
         machine.registers(compressor=3, cessb=256 | (37 << 9), low=low, high=high)
         for _ in range(3):
             call("bb_begin_block")
+        assert machine.u32("bb_applied_configurations") > 0, "ABI test never activated DSP"
         for mode in (0, 2):
             machine.flags(mode, True)
             call("bb_begin_block")
+            before = bytes(machine.cpu.mem_read(machine.symbols["dsp"], machine.dsp_size))
             for n in range(65):
                 machine.cpu.mem_write(SAMPLES, struct.pack("<ff", 0.7 if n % 2 else 0.01, -0.6))
                 call("bb_tx_audio", SAMPLES)
                 call("bb_tx_iq", SAMPLES, SAMPLES + 4)
                 call("bb_tx_interpolator", 0x20007490)
                 call("bb_tx_interpolator", 0x200075DC)
+            assert bytes(machine.cpu.mem_read(machine.symbols["dsp"], machine.dsp_size)) != before, "ABI test DSP remained inert"
     machine.flags(tx=False)
-    machine.put32("bb_lab_arm", 0)
+    machine.arm(False)
     call("bb_begin_block")
     print(f"Actual compiled callback ABI: PASS {calls} calls, r4-r11 (including r9) and s16-s31 unchanged")
     return dict(calls=calls, callee_saved_registers="r4-r11 including r9; s16-s31",

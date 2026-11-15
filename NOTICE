@@ -38,8 +38,8 @@ unmodified source does not supply the source for your modified binary. Preserve
 notices, identify modifications, and license covered modified works under the
 GPL as required by its terms. Private use does not itself require publication.
 
-Third-party provenance and unresolved permission
------------------------------------------------
+Third-party provenance and permission
+------------------------------------
 The DSP work adapts gdyuldin/x6100_base_patch r13, including the contributions
 of Georgy Dyuldin (R2RFE) and other upstream contributors:
 https://github.com/gdyuldin/x6100_base_patch/tree/644ac675a1765ce69755870767b4cb00a3e6d7eb
@@ -53,18 +53,25 @@ Affected material retained here:
   - tests/test_tx_dsp.c: reference CESSB/compressor implementations associated
     with the adapted DSP behavior.
 
+On 2026-11-15 the Guru-RF project maintainer confirmed that gdyuldin permits use
+and distribution of the r13-derived work provided our findings are published.
+This project relies on that permission. Findings, modifications, measurements
+and outstanding target checks are published in README.md, TESTING.md,
+firmware/v119-evidence.json, the verification tools and release reports. Preserve
+this upstream attribution and publish findings when distributing derived work.
+
 No root license grant or in-file license notices were found for those DSP files
-in the inspected r13 revision. Its vendor CMSIS/HAL licenses do not license these
-files. This repository's GPL grant covers our contributions only; it does not
-grant rights in the upstream material or establish permission to redistribute
-the complete derived source or a binary containing it. Upstream permission or
-replacement of affected material remains necessary before we can represent the
-complete project as freely redistributable. Credit is not a license grant.
+in the inspected r13 revision. The permission reported above is separate from
+our GPL grant: this repository does not purport to relicense upstream material
+under the GPL or the unrelated vendor CMSIS/HAL licenses.
 
 src/tx_protocol.c documents interface fields observed in r13 and OpenX6X00;
 protocol compatibility does not imply either project's endorsement.
 
-Vendor firmware, encryption keys and toolchains are not included. Nothing in
-this notice grants rights in Xiegu firmware or changes separately applicable
-toolchain, library or dependency licenses. Assess those separately when
-distributing any future linked or combined firmware image.
+Encrypted test images combine the exact identified Xiegu V1.1.9 base image with
+this project's changes. Original vendor code remains attributed to Xiegu; our
+license grant does not relicense it. Source archives contain the patch source
+and build tools, not vendor plaintext firmware, encryption keys or toolchains.
+
+The test payload links newlib libm. Its third-party copyright and license
+notices are reproduced in LICENSES/newlib.txt and accompany the release.

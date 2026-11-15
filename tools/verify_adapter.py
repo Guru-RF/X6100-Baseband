@@ -26,6 +26,7 @@ MODE, TX, RATE, REGS = 0x200085AD, 0x200085AF, 0x2000BA44, 0x2000C4C8
 FILTER_SETUP, FILTER_INSTANCE = 0x0802397C, 0x20007728
 STACK, SAMPLES, RETURN = 0x20028000, 0x20010000, 0x08000100
 COOKIE = 0x54584C42
+TEST_TOKEN = 0x54580000
 
 
 def float_bits(value):
@@ -47,6 +48,8 @@ class Machine:
             elf = ELFFile(stream)
             symbol_table = list(elf.get_section_by_name(".symtab").iter_symbols())
             self.symbols = {symbol.name: symbol["st_value"] for symbol in symbol_table}
+            self.test_build = "bb_test_build_marker" in self.symbols
+            self.test_protocol_enabled = False
             self.dsp_size = next(symbol["st_size"] for symbol in symbol_table if symbol.name == "dsp")
             for segment in elf.iter_segments():
                 if segment["p_type"] == "PT_LOAD" and segment["p_filesz"]:
@@ -112,8 +115,18 @@ class Machine:
         self.cpu.mem_write(TX, bytes([bool(tx)]))
 
     def registers(self, compressor=0, cessb=0, low=300, high=3000):
+        if self.test_build and self.test_protocol_enabled:
+            cessb |= TEST_TOKEN
         for reg, word in ((25, compressor), (36, cessb), (38, low | high << 16)):
             self.put32(REGS + reg * 4, word)
+
+    def arm(self, enabled=True):
+        if self.test_build:
+            self.test_protocol_enabled = enabled
+            word = self.u32(REGS + 36 * 4) & 0xffff
+            self.put32(REGS + 36 * 4, word | (TEST_TOKEN if enabled else 0))
+        else:
+            self.put32("bb_lab_arm", COOKIE if enabled else 0)
 
     def blocks(self, count=3):
         for _ in range(count):
@@ -136,8 +149,11 @@ class Machine:
         assert bytes(self.cpu.mem_read(self.symbols["dsp"], self.dsp_size)) == before
 
 
-def verify(path):
+def verify(path, test_build=False):
     m = Machine(path)
+    assert m.test_build == test_build, "ELF test-build marker does not match requested verification"
+    if test_build:
+        assert m.u32("bb_test_build_marker") == 0x54535432
     # Verify startup owns only payload state, even if SRAM starts nonzero.
     m.cpu.mem_write(0x20000000, b"\xa5" * 0x10000)
     m.put32(0x40023830, 0x00400001)
@@ -155,7 +171,7 @@ def verify(path):
     assert m.u32("bb_applied_configurations") == 0
     print("startup/unarmed: PASS CCM clock enabled preserving other bits; SRAM/samples unchanged")
 
-    m.put32("bb_lab_arm", COOKIE)
+    m.arm()
     m.blocks(1)
     assert not m.filter_calls, "one unstable snapshot applied prematurely"
     m.blocks(2)
@@ -198,19 +214,19 @@ def verify(path):
     # A lab disarm immediately bypasses processing, even during TX. Restoring
     # the stock filter is deferred until RX; no live coefficient rewrite.
     m.flags(tx=True)
-    m.put32("bb_lab_arm", 0)
+    m.arm(False)
     m.blocks(1); m.bypass()
     assert bytes(m.cpu.mem_read(m.symbols["configured"], 1)) == b"\x00"
     assert len(m.filter_calls) == 2
     # Re-arming in the same TX must not resurrect the previous configuration.
-    m.put32("bb_lab_arm", COOKIE); m.blocks(1); m.bypass()
+    m.arm(); m.blocks(1); m.bypass()
     assert bytes(m.cpu.mem_read(m.symbols["configured"], 1)) == b"\x00"
-    m.put32("bb_lab_arm", 0)
+    m.arm(False)
     m.flags(tx=False); m.blocks(1)
     assert m.filter_calls[-1] == (12500.0, 300.0, 3000.0)
     print("disarm: PASS immediate bypass, rearm in TX inert, stock filter restored on RX")
 
-    m.put32("bb_lab_arm", COOKIE)
+    m.arm()
     m.put32(RATE, float_bits(10000.0))
     m.registers(cessb=(1 << 8) | (37 << 9), low=160)
     old_calls, old_applied = len(m.filter_calls), m.u32("bb_applied_configurations")
@@ -231,7 +247,7 @@ def verify(path):
     # even when the selected passband differs from stock defaults.
     m = Machine(path)
     m.call("patch_init")
-    m.put32("bb_lab_arm", COOKIE)
+    m.arm()
     m.put32(RATE, float_bits(12500.0))
     m.flags(tx=False)
     m.registers(cessb=(1 << 8) | (37 << 9), low=160)
@@ -246,11 +262,51 @@ def verify(path):
     assert m.filter_calls[-1] == (12500.0, 300.0, 3000.0) and len(m.filter_calls) == 2
     print("configuration reuse: PASS compressor-only change skips OEM filter rebuild; edge change applies")
 
+    if test_build:
+        verify_test_activation(path)
+
+
+def verify_test_activation(path):
+    """Prove legacy/default words cannot activate a distributable TEST build."""
+    m = Machine(path)
+    m.call("patch_init")
+    m.put32(RATE, float_bits(12500.0))
+    m.flags(tx=False)
+    # Stock command RAM starts all zero. Even TX callbacks stay bypassed.
+    m.blocks()
+    assert m.u32("bb_lab_arm") == 0 and not m.filter_calls
+    m.flags(tx=True); m.blocks(); m.bypass()
+    # Legacy r13's active bits/boost do not carry the test token.
+    m.registers(cessb=(1 << 8) | (60 << 9), low=160)
+    m.flags(tx=False); m.blocks()
+    m.flags(tx=True); m.blocks(); m.bypass()
+    assert not m.filter_calls and m.u32("bb_applied_configurations") == 0
+    # A token received while already transmitting cannot start processing.
+    m.arm(); m.blocks(); m.bypass()
+    assert m.u32("bb_lab_arm") == 0
+    # Initial GUI transaction opts in with both effects OFF and stock bandpass.
+    m.arm(False)
+    m.registers(compressor=16, cessb=0, low=300, high=3000)
+    m.arm()
+    m.flags(tx=False); m.blocks()
+    assert m.u32("bb_lab_arm") == COOKIE
+    assert m.filter_calls == [(12500.0, 300.0, 3000.0)]
+    m.flags(tx=True); m.blocks(); m.bypass()
+    # A partially written token must not arm; each high byte matters.
+    for invalid in (0, 0x00580000, 0x54000000, 0x54590000, 0x55580000):
+        m.put32(REGS + 36 * 4, invalid | (1 << 8))
+        m.blocks(); m.bypass()
+        assert m.u32("bb_lab_arm") == 0
+    print("TEST activation: PASS stock/legacy/partial tokens bypass; RX-only arming; initial effects OFF")
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--elf", type=Path, default=ROOT / "build/tx-port.elf")
-    verify(parser.parse_args().elf)
+    parser.add_argument("--test-build", action="store_true",
+                        help="require and exercise GUI-token activation in the TEST ELF")
+    args = parser.parse_args()
+    verify(args.elf, args.test_build)
 
 
 if __name__ == "__main__":

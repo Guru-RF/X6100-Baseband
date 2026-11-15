@@ -18,7 +18,7 @@ from unicorn import Uc, UC_ARCH_ARM, UC_MODE_THUMB, UC_MODE_MCLASS, UC_HOOK_CODE
 from unicorn import arm_const as arm
 
 from plan_patch import BASE, validate_oem
-from verify_adapter import (Machine, COOKIE, RATE, SAMPLES, STACK, RETURN,
+from verify_adapter import (Machine, RATE, SAMPLES, STACK, RETURN,
                             FILTER_SETUP, FILTER_INSTANCE, float_bits, bits_float)
 from verify_oem_filter import FREQUENCIES, response
 
@@ -207,6 +207,7 @@ def configuration_timing(elf, oem):
                            "oem_constructor_calls": m.filter_calls[before:]})
         paths[name] = values
     capture("initial_rx_stability_and_apply", 4)
+    assert m.u32("bb_applied_configurations") == 1, "configuration timing tested bypass"
     capture("unchanged_rx")
     m.flags(tx=True)
     capture("first_tx")
@@ -223,7 +224,7 @@ def configuration_timing(elf, oem):
     capture("tx_filter_edges_change", 3)
     m.registers(low=3000, high=100)
     capture("invalid_configuration", 3)
-    m.put32("bb_lab_arm", 0)
+    m.arm(False)
     capture("disarm_stock_filter_restore")
     return {"units": "executed ARM instructions, not cycles",
             "oem_filter": "Real V1.1.9 constructor; its nested instruction count is already included in callback_instructions, never add it again.",
@@ -235,7 +236,7 @@ def prepare(machine):
     machine.put32(RATE, float_bits(FS))
     machine.registers(cessb=256 | (37 << 9), low=160)
     machine.flags(tx=False)
-    machine.put32("bb_lab_arm", COOKIE)
+    machine.arm()
 
 
 def timing(elf, r13, samples):
@@ -261,6 +262,7 @@ def timing(elf, r13, samples):
     new = {"patch_init": call("patch_init")}
     prepare(m)
     new["first_four_rx_blocks_oem_constructor_stubbed"] = [call("bb_begin_block") for _ in range(4)]
+    assert m.u32("bb_applied_configurations") == 1, "sample timing tested bypass"
     m.flags(tx=True)
     new["first_tx_block"] = call("bb_begin_block")
     new["unchanged_tx_block"] = call("bb_begin_block")
@@ -268,6 +270,7 @@ def timing(elf, r13, samples):
     wrapped.call("patch_init")
     prepare(wrapped)
     new["wrapped_first_four_rx_blocks_oem_constructor_stubbed"] = [wrapped.wrapped("block") for _ in range(4)]
+    assert wrapped.u32("bb_applied_configurations") == 1, "wrapper timing tested bypass"
     wrapped.flags(tx=True)
     new["wrapped_first_tx_block"] = wrapped.wrapped("block")
     new["wrapped_unchanged_tx_block"] = wrapped.wrapped("block")
@@ -302,6 +305,7 @@ def timing(elf, r13, samples):
         counts["r13_audio"].append(old_m.call(0x0807FB8C, SAMPLES))
         old_m.cpu.mem_write(SAMPLES, iq)
         counts["r13_iq"].append(old_m.call(0x08083868, SAMPLES, SAMPLES + 4))
+    assert min(counts["new_audio_core"]) > 0 and min(counts["new_iq_core"]) > 0, "DSP cores were never entered"
     return {"units": "executed ARM instructions, not cycles",
             "inputs": {"samples": samples, "sample_rate_hz": FS,
                        "audio": "0.02*sin(2*pi*1000*k/12500)",

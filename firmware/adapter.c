@@ -1,4 +1,5 @@
-/* V1.1.9 research adapter. See README: this is NOT a deployable port.
+/* V1.1.9 research adapter. The separate BB_TEST_BUILD is for on-radio testing;
+ * the default analysis build still requires the debugger-only interlock.
  * State/configuration are owned exclusively by the DMA callback. No writes to
  * OEM calibration, power coefficients, codec settings or flow packets.
  */
@@ -23,8 +24,17 @@
 #define READF(a) (*(volatile float *)(uintptr_t)(a))
 #define LAB_COOKIE 0x54584c42u
 
-/* Intentionally zero after reset. A debugger-only development interlock;
- * neither I2C traffic nor a legacy GUI can arm an unvalidated payload. */
+#if defined(BB_TEST_BUILD) && BB_TEST_BUILD != 1
+#error "BB_TEST_BUILD must be explicitly set to 1 for the test payload"
+#endif
+#ifdef BB_TEST_BUILD
+/* Retained by port.ld so the packager rejects an ordinary analysis ELF. */
+const uint32_t bb_test_build_marker
+    __attribute__((used, section(".rodata.bb_test_build_marker"))) = TX_TEST_BUILD_MARKER;
+#endif
+
+/* Intentionally zero after reset. Analysis: debugger-only interlock. Test:
+ * the exact GUI token arms it in RX; a stock/legacy GUI cannot arm it. */
 volatile uint32_t bb_lab_arm;
 volatile uint32_t bb_applied_configurations, bb_rejected_configurations;
 static tx_dsp_state dsp;
@@ -65,10 +75,20 @@ static void set_oem_filter(float low, float high) {
 /* Called once per DMA block, before its sample loop. Configuration is frozen
  * during TX. Two equal block snapshots reduce bytewise I2C tearing; they do NOT
  * constitute an atomic multi-register protocol. A commit/ack protocol is still
- * required before installation. Expensive filter calculations here also need
+ * required before a stable release. Expensive filter calculations here also need
  * cycle measurements against the receive DMA deadline. */
 void bb_begin_block(void) {
     uint8_t mode = READ8(0x200085ad), tx = READ8(0x200085af);
+#ifdef BB_TEST_BUILD
+    /* Fail closed on a missing token, including during TX. A token arriving
+     * during TX must wait for RX before this test payload becomes active.
+     * Zeroed command RAM therefore leaves compression/CESSB/filter unchanged.
+     */
+    if ((READ32(0x2000c4c8 + 36 * 4) & TX_TEST_CONTROL_MASK) != TX_TEST_CONTROL_TOKEN)
+        bb_lab_arm = 0;
+    else if (!tx)
+        bb_lab_arm = LAB_COOKIE;
+#endif
     if (mode != previous_mode || tx != previous_tx) {
         tx_dsp_reset(&dsp);
         tx_interpolation_reset();
@@ -138,6 +158,12 @@ void bb_begin_block(void) {
 }
 
 static bool voice_tx(void) {
+#ifdef BB_TEST_BUILD
+    /* A GUI disarm must bypass the next sample/selector callback even before
+     * the next DMA block processes the state reset and RX filter restoration. */
+    if ((READ32(0x2000c4c8 + 36 * 4) & TX_TEST_CONTROL_MASK) != TX_TEST_CONTROL_TOKEN)
+        return false;
+#endif
     if (bb_lab_arm != LAB_COOKIE || !configured || !READ8(0x200085af)) return false;
     /* Take one mode snapshot per check; retain live interlock/PTT checks at
      * every callback rather than caching activation across a DMA block. */

@@ -1,5 +1,5 @@
-/* Provisional locations for analysis builds only. Ownership must be established
- * on the target before this payload may be installed. Keep stock SRAM untouched. */
+/* Experimental locations for analysis and explicit test builds. Establish
+ * ownership on target before a stable release. Keep stock SRAM untouched. */
 ENTRY(v119_init_wrapper)
 MEMORY {
     FLASH (rx) : ORIGIN = 0x08080000, LENGTH = 128K
@@ -8,6 +8,7 @@ MEMORY {
 SECTIONS {
     .text : {
         KEEP(*(.text.v119_*))
+        KEEP(*(.rodata.bb_test_build_marker))
         *(.text*) *(.rodata*)
         . = ALIGN(4);
     } > FLASH

@@ -20,7 +20,7 @@ from unicorn import arm_const as arm
 
 from compare_cessb import Machine, Interpolator, R13_SHA, SAMPLE, STACK
 from plan_patch import BASE, validate_oem, thumb_bw
-from verify_adapter import COOKIE, MODE, TX, RATE, REGS, float_bits
+from verify_adapter import COOKIE, TEST_TOKEN, MODE, TX, RATE, REGS, float_bits
 
 ROOT = Path(__file__).resolve().parents[1]
 TX_INSTANCES = (0x20007490, 0x200075DC)
@@ -44,6 +44,7 @@ class Payload(Machine):
             elf = ELFFile(stream)
             self.symbols = {s.name: s["st_value"]
                             for s in elf.get_section_by_name(".symtab").iter_symbols()}
+            self.test_build = "bb_test_build_marker" in self.symbols
             for segment in elf.iter_segments():
                 if segment["p_type"] == "PT_LOAD" and segment["p_filesz"]:
                     self.cpu.mem_write(segment["p_paddr"], segment.data())
@@ -97,6 +98,13 @@ class Payload(Machine):
             address = self.symbols[address]
         self.cpu.mem_write(address, struct.pack("<I", value))
 
+    def arm(self, enabled=True):
+        if self.test_build:
+            word = struct.unpack("<I", self.cpu.mem_read(REGS + 36 * 4, 4))[0] & 0xffff
+            self.put32(REGS + 36 * 4, word | (TEST_TOKEN if enabled else 0))
+        else:
+            self.put32("bb_lab_arm", COOKIE if enabled else 0)
+
     def flags(self, mode=2, tx=False):
         self.cpu.mem_write(MODE, bytes([mode]))
         self.cpu.mem_write(TX, bytes([bool(tx)]))
@@ -113,12 +121,14 @@ class Payload(Machine):
 
     def configure(self, cessb=True):
         self.put32(RATE, float_bits(12500.0))
-        self.put32("bb_lab_arm", COOKIE)
         for register, value in ((25, 0), (36, (256 | (37 << 9)) if cessb else 0),
                                 (38, 300 | (3000 << 16))):
             self.put32(REGS + 4 * register, value)
+        self.arm()
         self.flags(tx=False)
         self.blocks(3)
+        applied = struct.unpack("<I", self.cpu.mem_read(self.symbols["bb_applied_configurations"], 4))[0]
+        assert applied > 0, "interpolation harness never activated DSP"
         self.flags(tx=True)
         self.blocks()
 
@@ -359,10 +369,10 @@ def verify(oem, r13, elf_bytes):
         assert bytes(m.cpu.mem_read(state, 32)) == bytes(32)
     second = m.interpolate(source[0], TX_INSTANCES[0])
     assert np.array_equal(first, second), "fresh mode used stale interpolation history"
-    m.put32("bb_lab_arm", 0)
+    m.arm(False)
     assert tuple(m.select(instance) for instance in TX_INSTANCES) == TX_INSTANCES
     m.blocks()
-    m.put32("bb_lab_arm", COOKIE)
+    m.arm()
     assert tuple(m.select(instance) for instance in TX_INSTANCES) == TX_INSTANCES
     m.blocks()
     assert tuple(m.select(instance) for instance in TX_INSTANCES) == TX_INSTANCES

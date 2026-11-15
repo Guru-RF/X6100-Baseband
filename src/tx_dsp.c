@@ -3,7 +3,7 @@
  * https://github.com/gdyuldin/x6100_base_patch/tree/r13
  * Copyright (C) 2026 Guru-RF and the X6100-Baseband contributors.
  * Our contributions: GPL-3.0-or-later; see LICENSE and NOTICE for attribution.
- * Upstream DSP permission remains unresolved; our grant does not license it.
+ * Upstream use/distribution permission and findings condition: see NOTICE.
  * Hardware integration and RF performance remain unvalidated.
  *
  * CESSB retains r13's 65-tap filtered clipping-error correction and 32-sample

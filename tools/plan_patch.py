@@ -26,10 +26,10 @@ BLOCKERS = [
     'Private TX interpolation matches r13 offline; target transition/spectrum and residual overshoot validation pending',
     'Whole-program CCM ownership and nested interrupt stack high-water not measured on target',
     'Sample scaling/sign compared offline; absolute RF scaling and output spectrum not measured on target',
-    'OEM compressor interaction must be resolved before activating added compressor',
+    'No downstream OEM compressor consumer found statically; on-radio interaction remains unmeasured',
     'Worst-case ISR cycles (including configuration updates) not measured',
     'I2C multi-register commit/ack transaction and whole-firmware collision audit missing',
-    'GUI capability detection and production identity/activation not integrated',
+    'Companion OpenX6X00 tx1a2-test capability detection/control needs on-radio validation',
     'IAP erase policy and rollback not validated for the extended image',
     'RF spectrum, filter response, ALC and first-TX-after-band-change tests not performed',
 ]
@@ -66,27 +66,33 @@ def read_elf(blob):
     if len(blob) < 52 or blob[:7] != b'\x7fELF\x01\x01\x01':
         raise ValueError('expected ELF32 little-endian')
     h = struct.unpack_from('<HHIIIIIHHHHHH', blob, 16)
-    kind, machine, _, entry, phoff, shoff, flags, _, phsize, phnum, shsize, shnum, _ = h
-    if kind != 2 or machine != 40 or not flags & 0x400:
+    kind, machine, version, entry, phoff, shoff, flags, ehsize, phsize, phnum, shsize, shnum, _ = h
+    if kind != 2 or machine != 40 or flags & 0x600 != 0x400:
         raise ValueError('expected linked ARM hard-float executable')
-    if phsize != 32 or shsize != 40:
+    if version != 1 or ehsize != 52 or phsize != 32 or shsize != 40:
         raise ValueError('unexpected ELF header layout')
+    if not phnum or not shnum or phoff < ehsize or shoff < ehsize:
+        raise ValueError('missing or overlapping ELF header tables')
     if phoff + phsize * phnum > len(blob) or shoff + shsize * shnum > len(blob):
         raise ValueError('truncated ELF header tables')
     segments = []
     for index in range(phnum):
-        typ, off, vaddr, paddr, filesz, memsz, _, _ = struct.unpack_from('<8I', blob, phoff + index * phsize)
+        typ, off, vaddr, paddr, filesz, memsz, segment_flags, _ = struct.unpack_from('<8I', blob, phoff + index * phsize)
         if typ != 1:
             continue
         if filesz > memsz or off + filesz > len(blob):
             raise ValueError('invalid load segment')
-        if not ((FLASH_START <= vaddr and vaddr + memsz <= FLASH_END) or
-                (CCM_START <= vaddr and vaddr + memsz <= CCM_END)):
+        in_flash = FLASH_START <= vaddr and vaddr + memsz <= FLASH_END
+        in_ccm = CCM_START <= vaddr and vaddr + memsz <= CCM_END
+        if not (in_flash or in_ccm):
             raise ValueError('load segment escapes reserved FLASH/CCM budgets')
+        if in_flash and vaddr != paddr:
+            raise ValueError('flash segment execution address differs from its load address')
         if filesz and not FLASH_START <= paddr < paddr + filesz <= FLASH_END:
             raise ValueError('file-backed load segment is outside payload flash')
         if filesz:
-            segments.append({'address': paddr, 'size': filesz,
+            segments.append({'address': paddr, 'virtual_address': vaddr,
+                             'size': filesz, 'flags': segment_flags,
                              'sha256': hashlib.sha256(blob[off:off + filesz]).hexdigest()})
     if not segments:
         raise ValueError('empty payload')
@@ -95,21 +101,34 @@ def read_elf(blob):
         if prev['address'] + prev['size'] > cur['address']:
             raise ValueError('overlapping payload segments')
     sections = [struct.unpack_from('<10I', blob, shoff + i * shsize) for i in range(shnum)]
+    for _, typ, _, _, off, size, _, _, _, _ in sections:
+        if typ == 3:
+            if not size or off + size > len(blob):
+                raise ValueError('invalid string table bounds')
+            if blob[off] != 0 or blob[off + size - 1] != 0:
+                raise ValueError('string table is not NUL-terminated')
     symbols = {}
     for _, typ, _, _, off, size, link, _, _, entsize in sections:
         if typ in (4, 9) and size:
             raise ValueError('unresolved relocations in payload')
         if typ != 2:
             continue
-        if entsize != 16 or link >= len(sections) or off + size > len(blob):
+        if entsize != 16 or size % 16 or link >= len(sections) or off + size > len(blob):
             raise ValueError('invalid symbol table')
         strings = sections[link]
+        if strings[1] != 3:
+            raise ValueError('symbol table does not reference a string table')
         names = blob[strings[4]:strings[4] + strings[5]]
         for pos in range(off, off + size, 16):
             name, value, _, _, _, section = struct.unpack_from('<IIIBBH', blob, pos)
             if name >= len(names):
                 raise ValueError('invalid symbol name')
-            name = names[name:].split(b'\0', 1)[0].decode('ascii')
+            end = names.find(b'\0', name)
+            if end < 0:
+                raise ValueError('unterminated symbol name')
+            name = names[name:end].decode('ascii')
+            if shnum <= section < 0xff00:
+                raise ValueError('invalid symbol section index')
             if name and section == 0:
                 raise ValueError(f'undefined symbol: {name}')
             if name:
@@ -127,8 +146,10 @@ def plan(image, elf):
         if name not in symbols or not symbols[name] & 1:
             raise ValueError(f'missing Thumb hook symbol: {name}')
         target = symbols[name] & ~1
-        if not any(s['address'] <= target < s['address'] + s['size'] for s in segments):
-            raise ValueError(f'hook outside loaded payload: {name}')
+        if not any(s['flags'] & 1 and s['virtual_address'] == s['address'] and
+                   s['address'] <= target and target + 2 <= s['address'] + s['size']
+                   for s in segments):
+            raise ValueError(f'hook outside executable loaded payload: {name}')
         writes.append({'name': name, 'address': hex(address), 'expected': expected,
                        'replacement': thumb_bw(address, target).hex(), 'target': hex(target)})
     return {'status': 'analysis-only; NOT approved for installation', 'image_generated': False,

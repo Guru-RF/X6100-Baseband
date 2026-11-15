@@ -1,3 +1,6 @@
+# XGF packaging and its host Python tests.
+pycryptodome==4.4.0
+
 # Optional offline ARM emulation checks; host C DSP tests do not require these packages.
 unicorn==2.1.4
 pyelftools==0.33

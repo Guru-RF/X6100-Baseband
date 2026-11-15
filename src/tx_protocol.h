@@ -3,6 +3,18 @@
 
 #include "tx_dsp.h"
 
+/* tx1a2-test GUI opt-in. Used only by the explicitly selected BB_TEST_BUILD.
+ * For every configuration change while receiving, publish reg36 with its
+ * high halfword clear, then reg25 (compressor) and reg38 (TX filter), then
+ * reg36 = TX_TEST_CONTROL_TOKEN | CESSB_low16 last. Keep compressor bit4 set
+ * and CESSB bit8 clear for initial bypass. This is not an acknowledgement or
+ * fully atomic I2C transaction; the adapter also requires stable snapshots.
+ * Stock and legacy r13 command words cannot provide this explicit opt-in.
+ */
+#define TX_TEST_CONTROL_MASK 0xffff0000u
+#define TX_TEST_CONTROL_TOKEN 0x54580000u
+#define TX_TEST_BUILD_MARKER 0x54535432u
+
 typedef struct {
     uint32_t compressor; /* I2C register 25 */
     uint32_t cessb;      /* I2C register 36; lower CW-peak bits ignored */

@@ -296,5 +296,44 @@
       "added_sample_path_including_wrappers": 928.1479357798165
     },
     "instruction_limit": "Executed instructions are not hardware cycles or a full-ISR deadline bound."
+  },
+  "experimental_release": {
+    "version": "v0.1.0-alpha.2",
+    "status": "encrypted test image; no hardware validation",
+    "build_identity": "Nov 27 2025,tx1a2-test",
+    "stock_version_unchanged": "V1.1.9",
+    "test_payload_elf_sha256": "c92fb9157c5c9aa795c10646c179ec9975be3aa70a2b1bf4d52f205170fd9520",
+    "xgf_sha256": "7e1278064af5eda40dd8a5029c10ecd2ec6d4232880b274d04f9e70cf7b9881e",
+    "xgf_size": 405504,
+    "program_end_exclusive": "0x8082c70",
+    "image_end_exclusive": "0x8083000",
+    "vector_table_bytes_preserved": 432,
+    "oem_changes": "Five hook instructions and 12-byte build-time field only; see image-manifest.json in release",
+    "activation": {
+      "register": 36,
+      "mask": "0xffff0000",
+      "token": "0x54580000",
+      "sequence": "clear token, publish reg25 and reg38, publish reg36+token last; RX only",
+      "initial_gui_defaults": "compressor bypass, CESSB off, filter300..3000",
+      "legacy_gui": "added processing bypassed"
+    },
+    "validation": {
+      "host_dsp_protocol": "pass",
+      "python_tests": 18,
+      "adapter_analysis_and_test": "pass",
+      "real_callback_abi_calls": 1577,
+      "runtime_fill_cases": 103752,
+      "cessb_r13_cases": 108,
+      "maximum_post_interpolation_overshoot_db": 4.4039559270913955,
+      "interpolation_r13_kernel_max_error": 0.0,
+      "rx_output_and_state_preserved": true,
+      "warm_added_sample_instructions": 952.1479357798165,
+      "filter_edge_change_instructions": 7710,
+      "assembled_reset_to_main": "pass in two inherited-clock cases; actual encrypted image, no function stubs",
+      "startup_stack_span_bytes": 296,
+      "missing_startup_hook_negative_control": "rejected"
+    },
+    "limitations": "Instructions are not hardware cycles. ISR, RF, nested interrupts, CCM ownership, IAP erase/calibration preservation and rollback remain bench tests.",
+    "upstream_permission": "Maintainer confirmed on2026-11-15; publish findings (NOTICE)."
   }
 }

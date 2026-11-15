@@ -1,14 +1,14 @@
 # X6100 V1.1.9 TX DSP port
 
 CESSB, adjustable TX filtering and compressor controls for **BASE V1.1.9
-(251127001)**. This builds an **analysis ELF**, not an installable firmware image.
-Hardware timing, RF behavior and update/rollback validation remain outstanding.
+(251127001)**. [v0.1.0-alpha.2](https://github.com/Guru-RF/X6100-Baseband/releases/tag/v0.1.0-alpha.2)
+provides an **encrypted XGF for experimental on-radio testing**, with source,
+findings and checksums. **TEST ONLY: hardware timing, RF behavior and
+update/rollback remain unvalidated.** Read [TESTING.md](TESTING.md) before use.
 
-The first [prerelease, v0.1.0-alpha.1](https://github.com/Guru-RF/X6100-Baseband/releases/tag/v0.1.0-alpha.1),
-is **TEST ONLY: source research preview, not installable**. It contains no
-flashable `.xgf` or `.bin`. [release.json](release.json) records this status with
-`installable: false` and an empty firmware asset list. OpenX6X00 may link to this
-preview, but must keep installation disabled.
+The separate `make payload` target still builds an analysis ELF with a
+debugger-only interlock. Only the explicit `make test-payload` build is accepted
+by the encrypted image builder. The earlier alpha.1 remains a source-only preview.
 
 ## Implementation
 
@@ -20,9 +20,11 @@ preview, but must keep installation disabled.
 - Five guarded assembly hooks, a private runtime without a heap, and optional
   DWT cycle profiling.
 
-The adapter requires a debugger-only laboratory interlock before processing or
-filter changes can occur. GUI/I2C commands cannot arm it. Added compression,
-CESSB and interpolation correction run only in voice LSB/USB TX. The OEM TX
+The test image reports build identity `Nov 27 2025,tx1a2-test`. A compatible
+OpenX6X00 build must explicitly opt in using the protocol in [TESTING.md](TESTING.md).
+Stock and legacy GUI commands leave the added processing bypassed. Initial GUI
+settings must leave compressor and CESSB off, with a 300–3000 Hz TX filter.
+Added compression, CESSB and interpolation correction run only in voice LSB/USB TX. The OEM TX
 bandpass is shared with other modulation modes, so its settings need broader
 mode validation. Configuration is frozen during TX; PTT/mode changes reset
 private histories.
@@ -33,18 +35,21 @@ It does not transplant the older V1.1.6 hardware-control code.
 ## Build and test
 
 Requirements: a C11 host compiler, Python 3, and GNU `arm-none-eabi-gcc` with
-binutils and newlib/libm for Cortex-M4 hard float. ARM verification additionally
-uses the packages in [tests/requirements.txt](tests/requirements.txt).
+binutils and newlib/libm for Cortex-M4 hard float. Packaging tests require
+PyCryptodome or cryptography; ARM verification uses the other packages in
+[tests/requirements.txt](tests/requirements.txt).
 
 ```sh
 make test
 make payload
+make test-payload
 # For an isolated toolchain:
 make payload CROSS=/path/to/toolchain/bin/arm-none-eabi-
 
 # Install optional Python dependencies in your own virtual environment:
 /path/to/venv/bin/python -m pip install -r tests/requirements.txt
 make test test-hooks test-adapter test-runtime PYTHON=/path/to/venv/bin/python
+make test-adapter-test PYTHON=/path/to/venv/bin/python
 ```
 
 Pass `CROSS=/path/to/toolchain/bin/arm-none-eabi-` to the test targets too if the
@@ -52,16 +57,44 @@ compiler is not on PATH. Outputs belong in ignored `build/`; toolchains,
 reference firmware and Python environments are external dependencies.
 
 The payload reserves `0x08080000..0x080a0000` for flash and
-`0x10000000..0x10004000` for CCM. The validated build uses 11,308 flash bytes and
+`0x10000000..0x10004000` for CCM. The analysis build uses 11,308 flash bytes and
 1,736 state bytes. Linker bounds are enforced; whole-program CCM ownership still
-requires target validation.
+requires target validation. The test build adds GUI opt-in and an identification
+marker, using 11,376 flash bytes and the same 1,736 state bytes; its exact load
+map is included in the release image manifest.
+
+## Encrypted test image
+
+Supply the exact stock encrypted V1.1.9 image and an external 32-byte AES key
+file (or a file containing 64 hex digits). Keep the key outside the repository.
+Build an explicit test payload first, then run:
+
+```sh
+mkdir -p build/release
+python tools/build_test_image.py \
+    --stock-xgf /path/to/X6100_BBFW_V1.1.9_251127001.xgf \
+    --payload-elf build/tx-test.elf --key-file /external/xgf.key \
+    --output build/release/X6100_BBFW_V1.1.9_251127001_tx1_alpha2_TEST.xgf \
+    --manifest build/release/image-manifest.json
+```
+
+Output names must be new files. The builder validates both stock ciphertext and
+plaintext hashes, all original hook instructions, ELF load bounds and the test
+build marker. It preserves the vector table and every OEM byte except the five
+hooks and the exact build-time string. It appends the payload, pads plaintext
+with `0xff` to 1 KiB, and encrypts raw AES-256-ECB blocks in the XGF format used
+by r13. The padding prevents an updater from adding unencrypted tail bytes.
+It checks the complete encryption/decryption roundtrip and bounds both AES and
+XMODEM extents below the calibration region. These checks validate the file;
+they do not establish what the radio's bootloader erases or prove recovery.
 
 ## Firmware verification
 
 Supply your own exact plaintext images. The V1.1.9 image must be 392,048 bytes
 with SHA-256 `3fa11293e06951c21c9cfda04ea08adad85eaadda26b77a8e8bbcca8820c53c4`.
 The comparison tools also require the original V1.1.6 r13 image and verify its
-hash. Vendor firmware, encryption keys and generated reports are not included.
+hash. Reference plaintext firmware and encryption keys are not included in the
+source tree; encrypted test images and validation reports are release assets.
 
 ```sh
 mkdir -p build/reports
@@ -85,6 +118,20 @@ It emits a JSON review plan, **never patched firmware**. Tests execute actual AR
 payload and OEM routines under Unicorn; this is not a cycle-accurate radio model.
 [firmware/v119-evidence.json](firmware/v119-evidence.json) records the address map,
 command encoding, provenance, validation summary and unresolved requirements.
+
+To verify the actual encrypted test image's assembled reset path:
+
+```sh
+python tools/verify_test_boot.py --stock-bin /path/to/V1.1.9.bin \
+    --payload-elf build/tx-test.elf \
+    --image-xgf build/release/X6100_BBFW_V1.1.9_251127001_tx1_alpha2_TEST.xgf \
+    --key-file /external/xgf.key > build/reports/boot.json
+```
+
+This executes OEM startup and the payload initializer to OEM main entry,
+checks preserved state, and rejects a missing startup hook. RCC/SCB are
+memory-backed and the OEM FPU-enable write is mirrored into Unicorn's FPU
+gate. It does not simulate the bootloader, interrupts or main's peripheral setup.
 
 For future optimization comparisons, retain a previous ELF outside this repo and
 pass `--baseline-elf /path/to/previous.elf` to `tools/analyze_tx_chain.py` and
@@ -117,6 +164,12 @@ save frames and rely on the compiled callees' AAPCS32 preservation of `r4-r11`
 and `s16-s31`. Actual callback checks and deliberate ABI-violation tests cover
 this contract; introducing a naked/non-AAPCS callback requires another audit.
 
+The alpha.2 test build checks the GUI token in every sample/selector callback.
+Its warmed added path measures **952.148 instructions/sample**, about 24 above
+the analysis build; a filter-edge callback measures 7,710 instructions. The
+release validation reports cover the actual test ELF, including 108 r13 CESSB
+comparisons, 1,577 callback ABI checks and 103,752 runtime fill cases.
+
 ## Target timing and remaining work
 
 ```sh
@@ -131,7 +184,7 @@ categories overlap and measure the whole callback; do not sum them. See
 [firmware/cycle_profile.h](firmware/cycle_profile.h) and the generated measurement
 guide in `build/cycle-profile/` for layout and limits.
 
-Before an installable build:
+Before a stable release; record these results during test-image evaluation:
 
 1. Measure complete ISR timing, nested-interrupt stack use and CCM ownership on
    target. Callback profiling excludes assembly wrappers and the complete ISR.
@@ -142,8 +195,8 @@ Before an installable build:
    eliminate its overshoot.
 3. Finish atomic I2C configuration publication and the command-collision audit.
    Stable snapshots currently reduce tearing but are not a commit/ack protocol.
-4. Integrate explicit GUI capability detection in OpenX6X00. Do not advertise an
-   r12/r13 revision or enable features absent from this payload.
+4. Validate the companion OpenX6X00 test-identity detection and control sequence.
+   Do not advertise an r12/r13 revision or enable features absent from this payload.
 5. Verify bootloader erase boundaries, calibration preservation and rollback,
    including interrupted updates. The bootloader implementation is unavailable.
 
@@ -158,7 +211,10 @@ See NOTICE for the scope, upstream credits and distribution details.
 The DSP derives from [gdyuldin/x6100_base_patch r13](https://github.com/gdyuldin/x6100_base_patch/tree/r13),
 commit `644ac675a1765ce69755870767b4cb00a3e6d7eb`. The port uses a conjugate return
 mixer instead of r13's fixed 90-degree rotation, a recursive oscillator, explicit
-state ownership and optimized FIR traversal. No license grant was found for
-the inspected upstream DSP sources. **Our GPL grant does not license that upstream
-material.** Permission to redistribute the complete derived project remains
-unresolved; NOTICE identifies the affected files. No vendor firmware is included.
+state ownership and optimized FIR traversal. The project maintainer has confirmed
+gdyuldin's permission for use and distribution provided our findings are published.
+That permission, its findings condition and upstream attribution are recorded in
+NOTICE; our GPL grant covers our own contributions. The encrypted test image
+contains the stock vendor base plus the documented changes. Source archives do
+not include vendor plaintext firmware or encryption keys. Linked newlib notices
+are in [LICENSES/newlib.txt](LICENSES/newlib.txt).
