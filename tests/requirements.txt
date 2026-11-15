@@ -1,0 +1,5 @@
+# Optional offline ARM emulation checks; host C DSP tests do not require these packages.
+unicorn==2.1.4
+pyelftools==0.33
+capstone==5.0.9
+numpy==2.5.4

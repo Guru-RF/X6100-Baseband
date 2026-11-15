@@ -1,0 +1,300 @@
+{
+  "schema_version": 1,
+  "status": "research-only; addresses verified statically; patch and target execution not validated",
+  "target": {
+    "name": "X6100_BBFW_V1.1.9_251127001",
+    "load_address": "0x08020000",
+    "plaintext_size": 392048,
+    "plaintext_sha256": "3fa11293e06951c21c9cfda04ea08adad85eaadda26b77a8e8bbcca8820c53c4",
+    "container_sha256": "87a3e96ea21abf16a14b0fb771aad19a9e0bf8c267f93ec71a09d38e59c25737",
+    "plaintext_end_exclusive": "0x0807fb70"
+  },
+  "source_revisions": {
+    "upstream_r13": "644ac675a1765ce69755870767b4cb00a3e6d7eb",
+    "OpenX6X00": "af73079bbfe479015a95c9996353501eedfeedae"
+  },
+  "hooks": {
+    "configure": {
+      "address": "0x0802459a",
+      "expected_bytes": "09f01bfe",
+      "evidence": "DMA1 Stream3 ISR passes DMA stream address0x40026070; target reads CR then extracts bit19, returning the double-buffer current target. Preserve call result and live machine state.",
+      "original_call_target": "0x0802e1d4",
+      "resume": "0x0802459e",
+      "status": "implemented; offline wrapper contract verified, target validation pending"
+    },
+    "startup": {
+      "address": "0x08034a4a",
+      "expected_bytes": "fff795fb",
+      "evidence": "After OEM SystemInit and libc initialization. Original BL enters main0x08034178. Chosen over early SystemInit hook so C runtime exists before patch initialization.",
+      "original_call_target": "0x08034178",
+      "resume": "0x08034a4e",
+      "status": "implemented; offline wrapper contract verified, target validation pending"
+    },
+    "prefilter_audio": {
+      "address": "0x080247ca",
+      "expected_bytes": "11f019fc",
+      "evidence": "Original BL calls OEM arm_biquad_cascade_df1_f32. Wrapper site identified by TX-hook analysis; preserving original call is required.",
+      "original_call_target": "0x08036000",
+      "resume": "0x080247ce",
+      "status": "implemented; offline wrapper contract verified, target validation pending"
+    },
+    "ssb_iq": {
+      "address": "0x080267ce",
+      "expected_bytes": "0ef0c9fd",
+      "evidence": "Original BL calls OEM FIR interpolation. Wrapper processes I/Q then redirects only r0 to a private descriptor for active CESSB voice TX; preserves OEM kernel and all other live state.",
+      "original_call_target": "0x08035364",
+      "resume": "0x080267d2",
+      "status": "implemented; offline wrapper contract verified, target validation pending"
+    },
+    "ssb_interpolation_second": {
+      "address": "0x08026866",
+      "expected_bytes": "0ef07dfd",
+      "original_call_target": "0x08035364",
+      "resume": "0x0802686a",
+      "evidence": "Second interpolation call, I at entry SP+0x54, r0=0x200075dc, r2=0x20007708, r3=1. Redirect descriptor only; CESSB already processed both samples in first wrapper.",
+      "status": "implemented; offline wrapper contract verified, target validation pending"
+    }
+  },
+  "functions": {
+    "get_dma_current_target": {
+      "address": "0x0802e1d4",
+      "expected_bytes": "0068c0f3c0407047",
+      "evidence": "ldr r0,[r0]; ubfx r0,r0,#19,#1; bx lr"
+    },
+    "setup_tx_biquad": {
+      "address": "0x0802397c",
+      "expected_bytes": "70eea00a70b5c0ee807a04460e462ded048b17ee900af0ee",
+      "evidence": "Equivalent algorithm to old setup_biquad_filter; called at0x08021d76 for TX filter.",
+      "abi": {
+        "s0": "sample rate float",
+        "s1": "low Hz float",
+        "s2": "high Hz float",
+        "r0": "filter instance pointer",
+        "r1": "flag (OEM passes1)"
+      }
+    }
+  },
+  "ram": {
+    "control_state": "0x20000024",
+    "i2c_raw": {
+      "address": "0x2000c4c8",
+      "bytes": 224,
+      "evidence": [
+        "Initial-data word0x20000014 points here; next word is0xe0",
+        "I2C event IRQ0x08033990 uses state0x20001430; its pointer+0x24 points to0x20000014",
+        "IRQ0x08033b36..46 writes incoming bytes through that backing pointer",
+        "Control-state+0x114 at0x20000138 holds identical array pointer"
+      ]
+    },
+    "tx_filter_instance": {
+      "address": "0x20007728",
+      "evidence": "Initialized at0x08021d32, passed to setup at0x08021d76 with300\u20133000 Hz"
+    },
+    "tx_rate": {
+      "address": "0x2000ba44",
+      "initial_float": 12500.0,
+      "evidence": "0x08021860..6c writes0x46435000;0x08021d3e..4e loads it before TX filter setup"
+    },
+    "data": {
+      "start": "0x20000000",
+      "end_exclusive": "0x20003570",
+      "flash_source": "0x0807c5d0"
+    },
+    "bss": {
+      "start": "0x20003570",
+      "end_exclusive": "0x2000eb00"
+    },
+    "heap": {
+      "start": "0x2000eb00",
+      "evidence": "sbrk-like function0x08034820 checks dynamically against stack pointer; cannot reserve SRAM above BSS merely because it is initially empty"
+    },
+    "ccm_proposal": {
+      "start": "0x10000000",
+      "end_exclusive": "0x10004000",
+      "status": "ownership not proven",
+      "evidence": [
+        "Disassembly sweep of main application0x08020200..0x08034818 and library0x08034a6c..0x0803cd6c found no identified direct CCM dereference",
+        "Examined0x1000xxxx immediates are peripheral flag values or arithmetic constants",
+        "Reset startup initializes SRAM data and BSS only; OEM heap is SRAM"
+      ],
+      "limitations": [
+        "Indirect/dynamically constructed addresses and bootloader use have not been excluded",
+        "CCM clock is explicitly enabled and read back in patch_init before payload state access; ownership and nested interrupt stack still require target verification.",
+        "CCM must contain CPU state only, not DMA-visible buffers",
+        "Patch code should use fixed storage, avoid malloc/free and OEM libc mutable state from ISR"
+      ]
+    }
+  },
+  "control_fields": {
+    "compressor": {
+      "register": 25,
+      "level_bits": [
+        0,
+        3
+      ],
+      "threshold_bits": [
+        5,
+        10
+      ],
+      "makeup_bits": [
+        11,
+        16
+      ],
+      "evidence": "OEM parser0x0802b9dc..ba28 reads raw+0x64 and consumes only level bits0..3 and enable bit4; shape fields match v0.16.3 API signed six-bit half-dB encoding",
+      "decoding": "sign_extend_6(raw >> 5) * 0.5 dB threshold; sign_extend_6(raw >> 11) * 0.5 dB makeup; r13 ratio=level+2",
+      "library_edge_case": "v0.16.3 clamps +16 dB then masks (int8_t)(value*2) to six bits; +16 encodes32, decoding as -16. Avoid claiming +16 representable; valid signed6 half-dB range is -16..15.5.",
+      "oem_enable_bit": 4,
+      "r13_bypass_bit": 4,
+      "r13_bit_semantics": "bit4=1 bypass, bit4=0 enabled. OpenX6X00 radio.c:on_change_comp_ratio explicitly inverts the OEM comp flag: ratio1 sends true; ratio>1 sends false and raw level=ratio-2."
+    },
+    "cessb": {
+      "register": 36,
+      "status": "main parser does not read raw+0x90; no collision located, not an exhaustive indirect-access proof",
+      "enable_bit": 8,
+      "power_up_bits": [
+        9,
+        14
+      ],
+      "power_up_unit_db": 0.1,
+      "library_clamp_db": [
+        0,
+        6
+      ]
+    },
+    "tx_filter": {
+      "register": 38,
+      "status": "main parser does not read raw+0x98; no collision located, not an exhaustive indirect-access proof",
+      "low_hz_bits": [
+        0,
+        15
+      ],
+      "high_hz_bits": [
+        16,
+        31
+      ],
+      "library_bounds": "none; firmware-side validation required"
+    },
+    "concurrency": "I2C IRQ writes bytes individually. Avoid consuming torn register updates; coefficient/state replacement must not expose partial writes to DSP IRQ."
+  },
+  "flash_layout": {
+    "payload_proposal": {
+      "start": "0x08080000",
+      "end_exclusive_limit": "0x080a0000",
+      "gap_after_image_bytes": 1168,
+      "status": "avoids located OEM code/data/calibration; IAP erase policy and whole-image behavior remain unverified"
+    },
+    "calibration_primary": {
+      "start": "0x08004000",
+      "sector": 1,
+      "record_bytes": 816,
+      "evidence": "Loader0x08033ef4..3f22 validates this address and prints Found valid calibration data on sector1; main0x0803473e..50 writes it"
+    },
+    "calibration_backup": {
+      "start": "0x080e0000",
+      "sector": 11,
+      "record_bytes": 816,
+      "evidence": "Loader0x08033f30..3f3e tries this after primary failure. String0x0803d248 explicitly says Move calibration data from sector11 to sector1. Preserve entire sector."
+    },
+    "settings": {
+      "start": "0x08008000",
+      "sector": 2,
+      "record_bytes": 44,
+      "evidence": "Main call0x080344ba passes destination0x08008000 and encoded sector0x10 to0x08033e3c; function processes11 words"
+    },
+    "limitations": [
+      "Application does not include bootloader; IAP erasure range cannot be established from these application images",
+      "No patched firmware flashed; no calibration writes performed",
+      "Do not extend payload into0x080e0000 or reuse0x08004000/0x08008000"
+    ]
+  },
+  "control_library": {
+    "version": "local v0.16.3 reference checkout (matches AetherX6100Buildroot package pin)",
+    "control_c_sha256": "d0381bad1144ec579a1a7276f98d821cfb4e495834712dca1fb2afddb75086f4",
+    "low_control_c_sha256": "6422edcbdb7ce99e4e3b41221cacfeb6201e82eff31d23ac332d6f8e0e9f7bf3",
+    "setter_gates": "TX filter setters(lines88/95), CESSB setters(102/109), compression setters(566..602) have no version gates; low/control.c225 sends any register directly.",
+    "version_parser": "low/control.c129..181 recognizes revision only from literal comma-r followed by atoi; absent comma-r means revision0.",
+    "gui_gates": "OpenX6X00 hw_start enables BF16 for rev>=8. hw_caps rev>=3 also enables auto-notch/codec gain/TX level, rev>=8 band gain/FM emphasis, rev>=9 TX filter, rev>=12 CESSB. Minimal port needs explicit capability identification; must not claim r12/r13."
+  },
+  "unresolved": [
+    "Control ABI whole-firmware collision audit",
+    "CCM ownership and high-water measurement",
+    "CESSB scaling and bounded ISR execution time",
+    "Safe publication of filter/compressor parameters across I2C/main/ISR",
+    "Bootloader IAP erasure and rollback behavior",
+    "Real RF spectrum/power/filter/compressor/first-TX bench validation"
+  ],
+  "tx_filter_indexing": {
+    "routine": "0x0802397c",
+    "formula": "clamp(trunc((double(float(2*f_Hz/Fs)) - 0.002) * 995.0), 0, 995)",
+    "hpf_index_clamp": "0x080239c4..0x080239da",
+    "lpf_index_clamp": "0x08023af4..0x08023b06",
+    "finite_input_note": "0..6150 Hz at12500 Hz sample rate does not exceed pointer table bounds; reject non-finite/negative/out-of-order edges separately. Clamping alone does not guarantee useful RF spectral performance.",
+    "quantization_hz_approx": 6.28140703517588,
+    "zero_low_note": "low=0 chooses HP table index0; it does not bypass HP stage. The routine computes normalized edge relative to0.002.",
+    "tables": [
+      {
+        "kind": "high_pass",
+        "ram_address": "0x20001484",
+        "flash_initializer_address": "0x807da54",
+        "entries": 996,
+        "record_bytes": 124,
+        "minimum_record_address": "0x803e4e4",
+        "maximum_record_address": "0x805c6d8",
+        "all_pointers_within_image": true,
+        "all_coefficients_finite": true,
+        "table_sha256": "1f95a053edbdc7d94b714f90fca92d7f0a74a79987932e6282d65bfdc8cdd312"
+      },
+      {
+        "kind": "low_pass",
+        "ram_address": "0x20002414",
+        "flash_initializer_address": "0x807e9e4",
+        "entries": 996,
+        "record_bytes": 124,
+        "minimum_record_address": "0x805c754",
+        "maximum_record_address": "0x807a948",
+        "all_pointers_within_image": true,
+        "all_coefficients_finite": true,
+        "table_sha256": "d74e46881e2be0a07983f8a34040b78634aab6169537f3083ef07cf22230bd70"
+      }
+    ]
+  },
+  "tx_interpolation": {
+    "shared_stock_table": "0x0803e3e4",
+    "stock_rom_and_ram_descriptors_modified": false,
+    "private_coefficients_source": "r13 fir_ssb_cw_8.txt / table0x0803d82c",
+    "coefficient_sha256": "d6f29c698597e5a8f5ac831dfd45dee937e721e203ba961949ef16cb53769e93",
+    "first_call": {
+      "descriptor": "0x20007490",
+      "channel": "Q",
+      "input": "entry SP+0x50",
+      "output": "0x200075bc"
+    },
+    "second_call": {
+      "descriptor": "0x200075dc",
+      "channel": "I",
+      "input": "entry SP+0x54",
+      "output": "0x20007708"
+    },
+    "private_state_bytes": 64,
+    "activation": "Only lab-armed, configured, CESSB-enabled voice LSB/USB TX; unknown descriptors pass through",
+    "reset": "Mode/PTT changes, accepted configuration, disarm and unexpected sample rate"
+  },
+  "offline_validation": {
+    "scope": "Synthetic ARM execution; no target timing or RF validation",
+    "compiler": "GNU Arm GCC 16.2.0, Cortex-M4 hard float, -Os",
+    "tested_payload_elf_sha256": "889dbf22d073fa725966bf5d73f94a9717535700275b335e538de3291d1033f4",
+    "flash_bytes": 11308,
+    "state_bytes": 1736,
+    "cessb_r13_cases": 108,
+    "dsp_equivalent_configurations": 72,
+    "dsp_equivalent_samples_and_state_snapshots": 27648,
+    "callback_abi_checks": 1577,
+    "wrapper_frame_bytes": 96,
+    "warm_instruction_means": {
+      "compressor_core": 214.8612385321101,
+      "cessb_core": 540.2866972477065,
+      "added_sample_path_including_wrappers": 928.1479357798165
+    },
+    "instruction_limit": "Executed instructions are not hardware cycles or a full-ISR deadline bound."
+  }
+}

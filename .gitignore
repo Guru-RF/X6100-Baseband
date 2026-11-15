@@ -1,0 +1,10 @@
+/build/
+/results/
+/.venv/
+__pycache__/
+*.pyc
+*.xgf
+*.bin
+*.elf
+*.o
+*.map
