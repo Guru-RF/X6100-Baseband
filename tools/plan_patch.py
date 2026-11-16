@@ -26,12 +26,12 @@ BLOCKERS = [
     'Private TX interpolation matches r13 offline; target transition/spectrum and residual overshoot validation pending',
     'Whole-program CCM ownership and nested interrupt stack high-water not measured on target',
     'Sample scaling/sign compared offline; absolute RF scaling and output spectrum not measured on target',
-    'No downstream OEM compressor consumer found statically; on-radio interaction remains unmeasured',
+    'No downstream OEM compressor consumer found statically; alpha.2 meter tests show compressor response but do not validate the candidate gain/threshold mapping',
     'Worst-case ISR cycles (including configuration updates) not measured',
     'I2C multi-register commit/ack transaction and whole-firmware collision audit missing',
-    'Companion OpenX6X00 tx1a2-test capability detection/control needs on-radio validation',
-    'IAP erase policy and rollback not validated for the extended image',
-    'RF spectrum, filter response, ALC and first-TX-after-band-change tests not performed',
+    'Companion OpenX6X00 controls were exercised with alpha.2 on one radio with RX-only settings changes; boot/recovery coverage and settings/PTT atomicity remain incomplete',
+    'One alpha.2 update and return to V1.1.8 preserved the checked calibration window; full IAP erase policy and interrupted-update recovery remain unvalidated',
+    'Alpha.2 radio-meter filter/ALC observations are published in TESTING.md; independent RF envelope/spectrum and first-TX-after-band-change validation remain outstanding',
 ]
 
 

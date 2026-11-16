@@ -10,7 +10,18 @@ ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--cross', default='arm-none-eabi-')
 parser.add_argument('--output-dir', type=Path, default=ROOT/'build/cycle-profile')
+parser.add_argument('--oem-bin', type=Path,
+                    help='optionally audit exact plaintext V1.1.9 initialization and include it in the guide')
 args = parser.parse_args()
+oem_contract = None
+if args.oem_bin is not None:
+    # Validate and audit before compiling. This is offline execution with a
+    # modeled peripheral state, not a clock or deadline measurement.
+    from verify_transport_contract import audit
+    try:
+        oem_contract = audit(args.oem_bin.read_bytes())
+    except (OSError, ValueError, ImportError, RuntimeError) as error:
+        parser.exit(2, f'OEM transport audit failed: {error}\n')
 out = args.output_dir.resolve()
 out.mkdir(parents=True, exist_ok=True)
 flags = ['-std=c11','-Os','-g3','-Wall','-Wextra','-Werror','-Isrc',
@@ -48,6 +59,7 @@ subprocess.run([args.cross+'size',str(elf)],check=True)
                      'interpolation_reset_path','interpolator_selector'],
     'categories': 'Path categories overlap and each includes the entire block callback. Do not add category totals. Unchanged means no marked event, including snapshot-stability waiting.',
     'arithmetic': 'mean=((total_cycles_high<<32)+total_cycles_low)/calls. Valid before calls wraps at 2^32 and if each interval is shorter than one CYCCNT wrap.',
+    'oem_transport_configuration': oem_contract,
     'external_timing_reference': {
         'source': 'https://github.com/fventuri/x6100-bbfw/tree/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7',
         'scope': 'RX-only replacement firmware; reference values, not measured alpha.2/OEM timing',

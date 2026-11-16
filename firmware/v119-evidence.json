@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "research-only; addresses verified statically; patch and target execution not validated",
+  "status": "experimental test firmware; static and emulated checks plus limited single-radio meter observations; target timing and independent RF validation incomplete",
   "target": {
     "name": "X6100_BBFW_V1.1.9_251127001",
     "load_address": "0x08020000",
@@ -302,10 +302,10 @@
     "commit": "57c5ce98a2202fabc86c5517f3ec8553eb4b98b7",
     "reviewed_on": "2026-11-16",
     "scope": "Published RX-only replacement firmware; source review, no execution or hardware validation by this project",
-    "adopted": "Clock/DMA/first-TX diagnostic procedure in TESTING.md and upstream reference values in the generated cycle-profile measurement guide; no upstream runtime code imported",
-    "useful_follow_up": "Offline CRC-gated telemetry validation, with explicit stock versus extended-flow format and no competing live UART reader",
+    "adopted": "Clock/DMA/first-TX diagnostics, independently implemented offline CRC-gated capture validation, and exact-OEM configuration/flow audits; no upstream runtime code imported",
     "limitations": "No TX/CESSB implementation, no atomic DSP commit acknowledgement, no RF overshoot or full-ISR timing proof, no OEM CCM ownership or bootloader recovery proof",
-    "provenance": "Franco Venturi contributions carry an MIT notice; any future code import must preserve it. Upstream also explicitly attributes battery/IIR tables to r13 and FIR arrays to recovered OEM data; review those origins separately."
+    "provenance": "Franco Venturi contributions carry an MIT notice; any future code import must preserve it. Upstream also explicitly attributes battery/IIR tables to r13 and FIR arrays to recovered OEM data; review those origins separately.",
+    "independent_protocol_reference": "https://github.com/OpenX6100/X6100Control/tree/7a5bb8e5367f59003ef03af221361e186da10bf0"
   },
   "experimental_release": {
     "version": "v0.1.0-alpha.2",
@@ -360,5 +360,62 @@
     },
     "limitations": "Instructions are not hardware cycles. Full ISR timing, RF envelope/spectrum and absolute power, nested interrupts, CCM ownership, complete IAP erase coverage and interrupted-update recovery remain unvalidated. The reported normal update/return and calibration-window preservation cover one radio and one cycle only.",
     "upstream_permission": "Maintainer confirmed on2026-11-15; publish findings (NOTICE)."
+  },
+  "offline_alignment_2026_11_16": {
+    "scope": "Bounded execution of selected exact V1.1.9 routines with modeled peripherals and synthetic data; no radio measurements or released firmware changes",
+    "tools": [
+      "tools/verify_transport_contract.py",
+      "tools/verify_oem_flow.py",
+      "tools/audit_flow_capture.py"
+    ],
+    "transport": {
+      "dma_streams": [
+        0,
+        3,
+        4,
+        5
+      ],
+      "bank_halfwords": 512,
+      "stereo_frames_per_bank": 128,
+      "i2s_slave": true,
+      "configured_raw_rate_hz": 100000,
+      "configured_primary_dsp_rate_hz": 12500,
+      "nominal_bank_period_seconds": 0.00128,
+      "nominal_core_hz_given_compiled_25mhz_hse": 250000000,
+      "oem_system_core_clock_integer_hz": 249999960,
+      "nominal_cycles_per_bank": 320000,
+      "physical_clocks_and_cadence_measured": false,
+      "bank_selection": "Actual ISR prefix checked for all four Stream3 RX CT / Stream4 TX CT combinations; inactive paired banks selected",
+      "clock_limit": "OEM SystemInit clears PLL enable before PLL configuration in the successful-lock model, including a synthetic inherited-PLL-on case; actual bootloader state, shutdown latency and lock timing remain unmeasured"
+    },
+    "interrupts": {
+      "prigroup": 5,
+      "dma1_stream3_preemption_priority": 2,
+      "i2c3_event_and_error_preemption_priority": 3,
+      "implication": "I2C3 cannot preempt active DMA under this configuration; DMA can preempt partial I2C writes. Forced writes between selector callbacks do not prove a reachable I2C ISR schedule.",
+      "isr_entry": "0x08024528",
+      "epilogue_entries": [
+        "0x0802454c",
+        "0x08027cc2"
+      ],
+      "return_instructions": [
+        "0x08024552",
+        "0x08027cc8"
+      ],
+      "software_frame_bytes": 176,
+      "stack_limit": "32 GPR + 40 VFP + 104 local bytes; excludes hardware exception frame, callees and nesting",
+      "atomic_settings_or_ptt_proven": false
+    },
+    "flow": {
+      "profile_for_alpha2": "oem",
+      "packet_bytes": 4136,
+      "crc_offset": "0x1024",
+      "crc_input_words": 1033,
+      "extended_metadata": "0x1014..0x101f remains unchanged by the tested OEM producer; not a whole-program write audit",
+      "hand_mic_key": "OEM setter writes 0x1020 without recomputing CRC; X6100Control retries with the previous key word. Offline validator requires the recorded CRC and does not repair packets.",
+      "capture_validation": "Independent C CRC vectors and synthetic streams; no raw on-radio binary capture validated",
+      "limits": "No arrival times, continuous IQ, RF envelope or overshoot measurement; CRC-failed candidates are not automatically UART corruption"
+    },
+    "remaining": "Physical clocks/DMA errors, complete ISR timing, all command/PTT writers, CCM ownership, RF overshoot/spectrum/power and interrupted-update recovery still require validation"
   }
 }

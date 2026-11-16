@@ -193,19 +193,39 @@ categories overlap and measure the whole callback; do not sum them. See
 [firmware/cycle_profile.h](firmware/cycle_profile.h) and the generated measurement
 guide in `build/cycle-profile/` for layout and limits.
 
+To audit the retained OEM clock, DMA bank selection and interrupt priorities,
+and include that configuration evidence in the guide:
+
+```sh
+python tools/build_cycle_profile.py --cross arm-none-eabi- \
+    --oem-bin /path/to/V1.1.9.bin
+python tools/verify_oem_flow.py --oem-bin /path/to/V1.1.9.bin \
+    --output build/reports/oem-flow.json
+python tools/audit_flow_capture.py /path/to/saved-uart-capture.bin --profile oem \
+    > build/reports/flow-audit.json
+```
+
+The first two require the optional emulation packages and exact OEM image;
+the capture validator uses only standard Python and reads saved binary files.
+It checks CRC before decoding telemetry. Use `oem` for alpha.2; the extended
+flow format belongs to other firmware. See [TESTING.md](TESTING.md#clock-dma-and-first-tx-diagnostics)
+for interpretation, exit codes and the GUI's hand-mic CRC workaround.
+
 The [clock/DMA diagnostic procedure](TESTING.md#clock-dma-and-first-tx-diagnostics)
 incorporates reviewed findings from Franco Venturi's
 [x6100-bbfw](https://github.com/fventuri/x6100-bbfw/tree/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7).
-That project is a replacement RX-only baseband; its nominal bank deadline and
-hardware bring-up observations are cross-checks for our retained OEM path,
-not target validation or a CESSB/overshoot correction.
+That project is a replacement RX-only baseband. Our independent OEM audit now
+confirms 128-frame banks and configured 100 kHz/12.5 kHz rate constants. These
+imply a nominal 1.28 ms bank period; physical clocks, complete ISR timing and RF
+overshoot still require measurements. No upstream runtime code is imported.
 
 Before a stable release; record these results during test-image evaluation:
 
 1. Measure complete ISR timing, nested-interrupt stack use and CCM ownership on
    target. Callback profiling excludes assembly wrappers and the complete ISR.
-   Full ISR coverage needs entry `0x08024528` and both observed exits
-   `0x0802454c` and `0x08027cc2`.
+   The OEM control-flow audit identifies entry `0x08024528`, epilogues
+   `0x0802454c` / `0x08027cc2`, and return instructions `0x08024552` /
+   `0x08027cc8`. Full ISR coverage must include both paths and their epilogues.
 2. Validate absolute RF power, ALC, spectrum, mic audio, bypass modes, RX recovery
    and repeated first transmissions after band changes. Matching r13 does not
    eliminate its overshoot.

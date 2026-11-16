@@ -5,6 +5,9 @@ Command bytes are deposited in the decoded OEM command array, with DMA callback
 boundaries explicitly interleaved. This does not emulate the I2C ISR, electrical
 failures, real interrupt scheduling, or RF transients. The OEM filter is stubbed
 by verify_adapter.Machine. No radio access or firmware changes are performed.
+The OEM transport audit finds I2C3 below DMA1 Stream3 in preemption priority.
+Forced writes between selectors therefore do not demonstrate an I2C interrupt
+between those selectors; use them as callback-level robustness scenarios.
 """
 import argparse
 import hashlib
@@ -141,7 +144,7 @@ def within_block_token_pulse(path):
     return {'observed': 'clear bypasses callbacks; republish before a block resumes old applied state',
             'clear_between_channel_selectors_can_mix_private_and_oem': True,
             'history_reset_before_resume': False, 'new_configuration_applied': False,
-            'limit': 'does not prove transition continuity or bound RF overshoot'}
+            'limit': 'forced callback-level writes; configured I2C3 cannot preempt the DMA ISR. Does not establish a reachable radio schedule, transition continuity or RF overshoot.'}
 
 
 def transition_after_rx_snapshot(path):
@@ -199,6 +202,7 @@ def main():
         'limits': ['A full refresh is a no-op only when all words equal the already applied values.',
                    'Partial/failed writes are not covered by the identical refresh guarantee.',
                    'TX is sampled at block entry; this is not an atomic PTT/configuration transaction.',
+                   'The OEM transport audit places I2C3 below DMA1 Stream3; forced within-ISR writes are not evidence of that I2C interrupt schedule.',
                    'No physical I2C, interrupt schedule, audio-transition or RF measurement.'],
     }
     if args.output:

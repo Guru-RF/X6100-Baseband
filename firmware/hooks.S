@@ -1,8 +1,8 @@
 /* V1.1.9 251127001 ONLY. SHA256 plaintext:
  * 3fa11293e06951c21c9cfda04ea08adad85eaadda26b77a8e8bbcca8820c53c4
- * Review draft; not connected to an image builder and not hardware validated.
+ * Used by the experimental image builder; target timing remains unvalidated.
  * Sample call sites have 8-byte aligned SP (DMA handler prologue allocates
- * 32 bytes GPR + 80 bytes VFP + 104 bytes local = 216 bytes).
+ * 32 bytes GPR + 40 bytes VFP (d8-d12) + 104 bytes local = 176 bytes).
  */
 .syntax unified
 .cpu cortex-m4

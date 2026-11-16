@@ -68,6 +68,16 @@ under the GPL or the unrelated vendor CMSIS/HAL licenses.
 src/tx_protocol.c documents interface fields observed in r13 and OpenX6X00;
 protocol compatibility does not imply either project's endorsement.
 
+Diagnostic protocol and hardware references (independent implementations):
+  - Franco Venturi's x6100-bbfw, commit
+    57c5ce98a2202fabc86c5517f3ec8553eb4b98b7:
+    https://github.com/fventuri/x6100-bbfw/tree/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7
+  - X6100Control, commit 7a5bb8e5367f59003ef03af221361e186da10bf0:
+    https://github.com/OpenX6100/X6100Control/tree/7a5bb8e5367f59003ef03af221361e186da10bf0
+The saved-flow validator and OEM configuration audits use these references
+alongside independent checks of the exact OEM image. No replacement firmware,
+DSP tables or upstream implementation code is imported by those tools.
+
 Encrypted test images combine the exact identified Xiegu V1.1.9 base image with
 this project's changes. Original vendor code remains attributed to Xiegu; our
 license grant does not relicense it. Source archives contain the patch source

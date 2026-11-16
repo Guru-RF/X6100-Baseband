@@ -137,16 +137,19 @@ old/default filter before the intended filter arrives. Recovery requires the
 explicit disarm/configure/publish sequence rather than assuming the cached
 full-register block is already present on the BASE.
 
-The alpha.2 image also has known timing limits when a settings write overlaps
-PTT. Clearing and republishing the token between block callbacks can bypass and
-resume the old DSP histories without a reset. Clearing it between the two I/Q
-selectors can select different interpolation paths for that pair. A TX-state
-transition injected after the initial RX snapshot does not cancel an in-flight
-configuration update. These are reproduced code-level interleavings, not
-measurements of the radio's interrupt schedule or RF output. GUI deferral based
-on received TX packets does not close that window. Do not change DSP settings
-while keying; coordinated TX/configuration commit and coherent I/Q switching
-remain required before a stable release.
+Callback-level tests force settings writes around PTT and between callbacks.
+In that model, clearing and republishing the token between block callbacks can
+bypass and resume old DSP histories without a reset; clearing it between I/Q
+selectors can select different interpolation paths. An injected TX-state
+transition after the initial RX snapshot does not cancel configuration work.
+These results describe callback behavior, not proven radio interrupt schedules.
+The subsequent OEM transport audit finds DMA1 Stream3 at preemption priority 2
+and I2C3 event/error at priority 3: under that configuration I2C3 cannot interrupt
+the active DMA handler between its selectors. DMA can still interrupt a partial
+I2C transfer. Other writers, interrupt changes and physical PTT timing are not
+fully audited. GUI deferral based on received TX packets does not establish an
+atomic transaction. Keep settings changes in RX until the complete command/PTT
+path and transition behavior are validated.
 
 `tools/verify_gui_protocol.py --elf build/tx-test.elf` reproduces the refresh,
 selection, PTT-boundary and recovery checks on the released payload. It models
@@ -240,10 +243,39 @@ length and interrupt cadence. The upstream
 [I2S transport](https://github.com/fventuri/x6100-bbfw/blob/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7/common/i2s.h#L21)
 uses **128 stereo frames per bank at 100 kHz**, with 12.5 kHz DSP. That implies
 **1.28 ms per bank**, or **320,000 core cycles at 250 MHz**. Treat these as
-reference values until confirmed on the OEM V1.1.9 path we retain. Measure the
-whole ISR, including bank selection, configuration/reset work, wrappers and
-preemption; neither our callback counters nor upstream's RX-body CPU gauge
-cover all of it.
+reference timing values until measured on the OEM V1.1.9 path we retain. The
+offline audit below confirms the OEM's configured bank size, not its external
+clock frequency. Measure the whole ISR, including bank selection,
+configuration/reset work, wrappers and preemption; neither our callback
+counters nor upstream's RX-body CPU gauge cover all of it.
+
+The repeatable OEM audit executes selected initialization routines from the
+exact hash-checked V1.1.9 image with modeled peripheral registers. It confirms
+four double-buffered DMA streams with **512 halfwords per bank**, and 32-bit
+stereo I2S: **128 frames per bank**. Stream 3 receives; stream 4 transmits, and
+our begin-block hook reads the TX stream's current-target bit. I2S is configured
+as a slave, so these writes do not establish 100 kHz. The clock code requests
+an HSE-based PLL configuration consistent with 250 MHz given its compiled
+25 MHz HSE assumption. That is not a measurement of the oscillator, inherited
+bootloader state or effective PLL settings. The model does not establish that
+real hardware accepts every clock write. In both zeroed and synthetic
+inherited-PLL-on cases, the selected OEM SystemInit routine clears PLL enable
+before configuration. Upstream's inherited-PLL bring-up issue therefore does
+not justify applying the same clock change to this OEM-based patch.
+
+```sh
+python tools/verify_transport_contract.py --oem-bin /path/to/V1.1.9.bin \
+    --output build/reports/oem-transport.json
+python tools/verify_oem_flow.py --oem-bin /path/to/V1.1.9.bin \
+    --output build/reports/oem-flow.json
+python tools/build_cycle_profile.py --cross arm-none-eabi- \
+    --oem-bin /path/to/V1.1.9.bin
+```
+
+These commands require the optional emulation dependencies in
+`tests/requirements.txt`. The profile builder embeds the transport audit in its
+measurement guide when `--oem-bin` is supplied; without it, the guide retains
+only the external reference. No command above connects to or flashes a radio.
 
 For a missing or weak first TX, correlate the external RF capture with I2S
 status/error flags, DMA `NDTR` and current-target bits for each stream, and ISR
@@ -261,11 +293,39 @@ For voltage/transport diagnosis, upstream's
 [flow reader](https://github.com/fventuri/x6100-bbfw/blob/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7/firmwares/phase4-linux/ttys1_flow_reader.py)
 is a useful format reference: 4,136-byte packets, CRC at `0x1024`, external
 voltage at `0x100C` in tenths of a volt, and external-power flag bit 3 at
-`0x1004`. A future offline validator should gate decoding on CRC success and
-use an explicit stock/extended format choice. Its live reader changes UART
-settings; do not run a competing reader beside the GUI. Its extended `r8`
-flow metadata is not part of alpha.2's stock-format contract. Panadapter IQ
-snapshots and packet telemetry do not replace an external RF envelope capture.
+`0x1004`. These common offsets and the CRC are independently corroborated by
+[X6100Control](https://github.com/OpenX6100/X6100Control/tree/7a5bb8e5367f59003ef03af221361e186da10bf0)
+and bounded execution of the OEM packet producer. The OEM producer leaves the
+extended metadata bytes at `0x1014..0x101F` untouched in that execution.
+
+Audit an already saved **binary UART capture**, using `oem` for stock or alpha.2:
+
+```sh
+mkdir -p build/reports
+python tools/audit_flow_capture.py /path/to/capture.bin --profile oem \
+    > build/reports/flow-audit.json
+```
+
+This tool requires only Python's standard library and accepts regular files,
+not serial devices, pipes or symlinks. It reports CRC-checked telemetry ranges,
+framing offsets, skipped bytes, incomplete tails and nonfinite IQ components;
+frame/event details are bounded by `--detail-limit`. Exit status is 0 for a
+nonempty clean capture, 1 for anomalies or no decoded frames, and 2 for invalid
+input. Text logs such as the alpha.2 `a2-*.txt` bench runs are not binary captures.
+The `extended-r8` profile explicitly enables extended metadata and FP32/BF16
+format selection; it does not detect firmware or add those capabilities to
+alpha.2. Unknown extended formats are rejected rather than decoded as FP32.
+
+Every decoded packet must match its recorded CRC. X6100Control can also accept
+some mismatches by retrying with the previous hand-mic key word; this validator
+does not repair CRCs. Consequently its rejected candidates can differ from GUI
+acceptance and do not by themselves prove UART corruption. False framing magic
+is another possible cause. No raw on-radio binary capture has been validated
+here yet; the tests use independent CRC vectors and synthetic streams.
+
+Upstream's live reader changes UART settings; do not run a competing reader
+beside the GUI. Panadapter IQ snapshots and packet telemetry do not establish
+continuous sampling or replace an external RF envelope capture for overshoot.
 
 The review found no staged TX configuration/acknowledgement protocol to adopt:
 upstream register 55's boot-ready bit is not a DSP commit acknowledgement.
