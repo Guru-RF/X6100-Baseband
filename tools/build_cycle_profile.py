@@ -48,7 +48,21 @@ subprocess.run([args.cross+'size',str(elf)],check=True)
                      'interpolation_reset_path','interpolator_selector'],
     'categories': 'Path categories overlap and each includes the entire block callback. Do not add category totals. Unchanged means no marked event, including snapshot-stability waiting.',
     'arithmetic': 'mean=((total_cycles_high<<32)+total_cycles_low)/calls. Valid before calls wraps at 2^32 and if each interval is shorter than one CYCCNT wrap.',
-    'required_target_checks': ['Record actual core clock and DMA block length/rate.',
+    'external_timing_reference': {
+        'source': 'https://github.com/fventuri/x6100-bbfw/tree/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7',
+        'scope': 'RX-only replacement firmware; reference values, not measured alpha.2/OEM timing',
+        'source_files': ['common/i2s.h', 'common/i2s.c', 'firmwares/phase4-linux/firmware.c'],
+        'bank_stereo_frames': 128,
+        'transport_frames_per_second': 100000,
+        'dsp_samples_per_second': 12500,
+        'nominal_bank_period_seconds': 0.00128,
+        'configured_core_hz': 250000000,
+        'nominal_cycles_per_bank': 320000,
+        'confirmed_on_our_target': False,
+        'limit': 'Upstream brackets its RX DSP body only; its CPU gauge is not complete ISR timing.'
+    },
+    'required_target_checks': ['Record actual RCC CR/PLLCFGR/CFGR, BCLK/WS rates, DMA bank length and measured interrupt cadence; confirm reference values before computing deadline margin.',
+                               'Correlate first-TX RF captures with I2S status/error flags, DMA NDTR/current-target bits and ISR entry/bank counters; distinguish missing clocks, bank faults and missing GUI/PTT requests.',
                                'Exercise first TX, both sidebands, band/mode changes, cold and changed configuration, worst input and preempting interrupts.',
                                'Measure complete ISR entry through all exits separately before claiming DMA deadline margin.']
 }, indent=2)+'\n')

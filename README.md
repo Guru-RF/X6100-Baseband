@@ -193,6 +193,13 @@ categories overlap and measure the whole callback; do not sum them. See
 [firmware/cycle_profile.h](firmware/cycle_profile.h) and the generated measurement
 guide in `build/cycle-profile/` for layout and limits.
 
+The [clock/DMA diagnostic procedure](TESTING.md#clock-dma-and-first-tx-diagnostics)
+incorporates reviewed findings from Franco Venturi's
+[x6100-bbfw](https://github.com/fventuri/x6100-bbfw/tree/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7).
+That project is a replacement RX-only baseband; its nominal bank deadline and
+hardware bring-up observations are cross-checks for our retained OEM path,
+not target validation or a CESSB/overshoot correction.
+
 Before a stable release; record these results during test-image evaluation:
 
 1. Measure complete ISR timing, nested-interrupt stack use and CCM ownership on

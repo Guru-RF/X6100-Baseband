@@ -226,5 +226,52 @@ Measurement-method references: Keysight's
 and Rohde & Schwarz's
 [two-tone intermodulation measurements](https://www.rohde-schwarz.com/us/applications/intermodulation-distortion-measurements-on-modern-spectrum-analyzers_56280-15423.html).
 
+### Clock, DMA and first-TX diagnostics
+
+Source review on 16 November 2026:
+[Franco Venturi's x6100-bbfw, commit 57c5ce98](https://github.com/fventuri/x6100-bbfw/tree/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7).
+This is a replacement baseband whose published phases remain RX-only. Its
+hardware observations are useful diagnostic leads; they are not measurements
+of alpha.2 and do not provide a TX/CESSB fix.
+
+Before converting DWT cycles into deadline margin, capture the actual RCC
+clock configuration (`CR`, `PLLCFGR`, `CFGR`), measured BCLK/WS rates, DMA bank
+length and interrupt cadence. The upstream
+[I2S transport](https://github.com/fventuri/x6100-bbfw/blob/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7/common/i2s.h#L21)
+uses **128 stereo frames per bank at 100 kHz**, with 12.5 kHz DSP. That implies
+**1.28 ms per bank**, or **320,000 core cycles at 250 MHz**. Treat these as
+reference values until confirmed on the OEM V1.1.9 path we retain. Measure the
+whole ISR, including bank selection, configuration/reset work, wrappers and
+preemption; neither our callback counters nor upstream's RX-body CPU gauge
+cover all of it.
+
+For a missing or weak first TX, correlate the external RF capture with I2S
+status/error flags, DMA `NDTR` and current-target bits for each stream, and ISR
+entry/bank counters. Upstream reports
+[inherited bootloader PLL state](https://github.com/fventuri/x6100-bbfw/blob/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7/common/bsp.c#L30)
+and [WS-aligned I2S startup](https://github.com/fventuri/x6100-bbfw/blob/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7/common/i2s.c#L117)
+as relevant to its bring-up. Check clock presence and frame alignment before
+attributing a failure to DSP scaling. Do not change the retained OEM clock or
+codec setup on that evidence alone. Exercise transitions in both directions
+across independently verified OEM RF-switching boundaries as well as the
+normal band changes; distinguish a rejected GUI/PTT request from a keyed radio
+with missing RF output.
+
+For voltage/transport diagnosis, upstream's
+[flow reader](https://github.com/fventuri/x6100-bbfw/blob/57c5ce98a2202fabc86c5517f3ec8553eb4b98b7/firmwares/phase4-linux/ttys1_flow_reader.py)
+is a useful format reference: 4,136-byte packets, CRC at `0x1024`, external
+voltage at `0x100C` in tenths of a volt, and external-power flag bit 3 at
+`0x1004`. A future offline validator should gate decoding on CRC success and
+use an explicit stock/extended format choice. Its live reader changes UART
+settings; do not run a competing reader beside the GUI. Its extended `r8`
+flow metadata is not part of alpha.2's stock-format contract. Panadapter IQ
+snapshots and packet telemetry do not replace an external RF envelope capture.
+
+The review found no staged TX configuration/acknowledgement protocol to adopt:
+upstream register 55's boot-ready bit is not a DSP commit acknowledgement.
+Its Renode setup does not reproduce live I2S clocks/DMA timing, and its
+replacement-firmware memory layout cannot prove OEM CCM ownership. Retain
+the existing validation gates and exact `tx1a2-test` feature detection.
+
 Publish findings with the source/release so the permission condition recorded
 in NOTICE is met. Distinguish observed measurements from inferred behavior.

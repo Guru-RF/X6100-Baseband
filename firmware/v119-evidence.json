@@ -297,6 +297,16 @@
     },
     "instruction_limit": "Executed instructions are not hardware cycles or a full-ISR deadline bound."
   },
+  "external_hardware_reference": {
+    "repository": "https://github.com/fventuri/x6100-bbfw",
+    "commit": "57c5ce98a2202fabc86c5517f3ec8553eb4b98b7",
+    "reviewed_on": "2026-11-16",
+    "scope": "Published RX-only replacement firmware; source review, no execution or hardware validation by this project",
+    "adopted": "Clock/DMA/first-TX diagnostic procedure in TESTING.md and upstream reference values in the generated cycle-profile measurement guide; no upstream runtime code imported",
+    "useful_follow_up": "Offline CRC-gated telemetry validation, with explicit stock versus extended-flow format and no competing live UART reader",
+    "limitations": "No TX/CESSB implementation, no atomic DSP commit acknowledgement, no RF overshoot or full-ISR timing proof, no OEM CCM ownership or bootloader recovery proof",
+    "provenance": "Franco Venturi contributions carry an MIT notice; any future code import must preserve it. Upstream also explicitly attributes battery/IIR tables to r13 and FIR arrays to recovered OEM data; review those origins separately."
+  },
   "experimental_release": {
     "version": "v0.1.0-alpha.2",
     "status": "encrypted test image; limited single-radio meter tests, not fully hardware validated",
